@@ -1,0 +1,252 @@
+diff --git a/src/mods/vr/D3D12Component.cpp b/src/mods/vr/D3D12Component.cpp
+index f7d4f3e3..0de7618c 100644
+--- a/src/mods/vr/D3D12Component.cpp
++++ b/src/mods/vr/D3D12Component.cpp
+@@ -13,6 +13,7 @@
+ #include <mutex>
+ #include <sstream>
+ #include <unordered_set>
++#include <filesystem>
+ 
+ #include "Framework.hpp"
+ #include "utility/BoundedTextureDiagnostics.hpp"
+@@ -227,6 +228,14 @@ bool is_shf_current_game() {
+     return result;
+ }
+ 
++bool is_far_far_west_current_game() {
++    static const bool result = []() {
++        const auto path = utility::get_module_pathw(utility::get_executable());
++        return path && std::filesystem::path{*path}.filename() == L"FarFarWest-Win64-Shipping.exe";
++    }();
++    return result;
++}
++
+ bool shf_texture_diagnostics_enabled() {
+     const auto vr = VR::get();
+     return vr != nullptr && vr->get_fake_stereo_hook() != nullptr &&
+@@ -3640,6 +3649,45 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+             RECT right_source_rect{(LONG)((float)m_backbuffer_size[0] / 2.0f), 0, (LONG)((float)m_backbuffer_size[0]), (LONG)m_backbuffer_size[1]};
+             std::optional<RECT> screen_dest_rect = std::nullopt;
+ 
++            const auto far_far_west_cinematic_2d = is_2d_screen && is_far_far_west_current_game();
++            if (far_far_west_cinematic_2d) {
++                // UE5.8 may replace/resize the scene resource during a camera
++                // cut without updating the dimensions cached at VR startup.
++                // Sample only the current resource's eye, never a stale height
++                // extending beyond it (which smears the lower part of a movie).
++                const auto width = static_cast<LONG>(view_desc.Width);
++                const auto height = static_cast<LONG>(view_desc.Height);
++                if (width < 2 || height < 1) { return; }
++                left_source_rect = RECT{0, 0, width / 2, height};
++                right_source_rect = RECT{width / 2, 0, width, height};
++
++                // The movie is a 16:9 image but the OpenXR screen texture is
++                // near square. Fit it rather than stretching it down into the
++                // lower half of the target. The cleared area remains the
++                // requested black surround, and the same mono frame is used
++                // for both eyes below.
++                const auto screen_desc = m_2d_screen_tex[0].texture->GetDesc();
++                const auto source_aspect = static_cast<float>(width / 2) / static_cast<float>(height);
++                const auto screen_aspect = static_cast<float>(screen_desc.Width) / static_cast<float>(screen_desc.Height);
++                RECT dest_rect{0, 0, static_cast<LONG>(screen_desc.Width), static_cast<LONG>(screen_desc.Height)};
++                if (source_aspect > screen_aspect) {
++                    const auto fitted_height = static_cast<LONG>(static_cast<float>(screen_desc.Width) / source_aspect);
++                    const auto y = (static_cast<LONG>(screen_desc.Height) - fitted_height) / 2;
++                    dest_rect.top = y;
++                    dest_rect.bottom = y + fitted_height;
++                } else {
++                    const auto fitted_width = static_cast<LONG>(static_cast<float>(screen_desc.Height) * source_aspect);
++                    const auto x = (static_cast<LONG>(screen_desc.Width) - fitted_width) / 2;
++                    dest_rect.left = x;
++                    dest_rect.right = x + fitted_width;
++                }
++                screen_dest_rect = dest_rect;
++                SPDLOG_INFO_EVERY_N_SEC(2,
++                    "[FarFarVR][Cinema] resource=[{}x{}] cached=[{}x{}] mono crop=[{}x{}] fit=[{},{} -> {},{}]",
++                    width, height, m_backbuffer_size[0], m_backbuffer_size[1], width / 2, height,
++                    dest_rect.left, dest_rect.top, dest_rect.right, dest_rect.bottom);
++            }
++
+             if (use_mono_flat_screen_source) {
+                 const auto source_width = (LONG)view_desc.Width;
+                 const auto source_height = (LONG)view_desc.Height;
+@@ -3824,7 +3872,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+                         commands.cmd_list.Get(),
+                         *screen_source_tex,
+                         m_2d_screen_tex[1],
+-                        right_source_rect,
++                        // Cinematics are a fixed movie surface. Reusing the
++                        // bounded left image prevents a transient right-eye
++                        // source from appearing as a second side-by-side view.
++                        far_far_west_cinematic_2d ? left_source_rect : right_source_rect,
+                         screen_dest_rect,
+                         ENGINE_SRC_COLOR,
+                         ENGINE_SRC_COLOR
+@@ -4322,7 +4373,21 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+                 }
+             } else {
+                 // Copy over the entire double wide, or submit native stereo as texture-array slices.
+-                if (suppress_scene_copy) {
++                const bool far_far_west_transition_hold = is_far_far_west_current_game() &&
++                    (use_2d_screen ||
++                     (vr->is_native_stereo_fix_enabled() && native_stereo_packet == nullptr &&
++                      m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE)));
++                if (far_far_west_transition_hold) {
++                    // Do not replace a completed stereo pair with the raw
++                    // packed/half-rendered scene while the independent right
++                    // eye is being recreated after travel or a camera cut.
++                    // In cinema, leave the hidden projection image untouched.
++                    // OpenXR may reuse its last released image until the next
++                    // validated pair; no new image is acquired uninitialized.
++                    SPDLOG_INFO_EVERY_N_SEC(2,
++                        "[FarFarVR][Transition] Retaining completed scene image cinema={} waiting_for_pair={}",
++                        use_2d_screen, native_stereo_packet == nullptr);
++                } else if (suppress_scene_copy) {
+                     SPDLOG_INFO_EVERY_N_SEC(2, "[OpenXR][debug] Skipping double-wide scene copy for perf isolation");
+                     if (!debug_submit_empty_frame) {
+                         m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, nullptr, scene_source_state, nullptr);
+@@ -4586,23 +4651,33 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+                         "[SHf][D3D12] Submitting auto 2D screen as eye-specific OpenXR slate layers");
+                 }
+ 
+-                const auto left_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_LEFT, ui_pose_basis_ptr);
+-                const auto right_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT, ui_pose_basis_ptr);
++                const auto far_far_west_cinematic_2d = is_2d_screen && is_far_far_west_current_game();
++                if (far_far_west_cinematic_2d) {
++                    // A cinematic is monoscopic by design. Submit one BOTH-eye
++                    // quad so a late/stale right-eye image can never expose a
++                    // second side-by-side movie.
++                    const auto cinema_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_BOTH, ui_pose_basis_ptr);
++                    if (cinema_layer && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
++                        quad_layers.push_back((XrCompositionLayerBaseHeader*)&cinema_layer->get());
++                    }
++                } else {
++                    const auto left_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI, XrEyeVisibility::XR_EYE_VISIBILITY_LEFT, ui_pose_basis_ptr);
++                    const auto right_layer = openxr_overlay.generate_slate_layer(runtimes::OpenXR::SwapchainIndex::UI_RIGHT, XrEyeVisibility::XR_EYE_VISIBILITY_RIGHT, ui_pose_basis_ptr);
+ 
+-                if (left_layer && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
+-                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&left_layer->get());
+-                }
++                    if (left_layer && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
++                        quad_layers.push_back((XrCompositionLayerBaseHeader*)&left_layer->get());
++                    }
+ 
+-                if (right_layer && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT)) {
+-                    quad_layers.push_back((XrCompositionLayerBaseHeader*)&right_layer->get());
++                    if (right_layer && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI_RIGHT)) {
++                        quad_layers.push_back((XrCompositionLayerBaseHeader*)&right_layer->get());
++                    }
+                 }
+ 
+                 if (halo_electra_renderer_2d_screen) {
+                     SPDLOG_INFO_EVERY_N_SEC(
+                         2,
+-                        "[Halo][OpenXR] Submitting opaque eye-specific cinematic layers left={} right={} layer_count={}",
+-                        left_layer.has_value(),
+-                        right_layer.has_value(),
++                        "[Halo][OpenXR] Submitting opaque cinematic layers monoscopic={} layer_count={}",
++                        far_far_west_cinematic_2d,
+                         quad_layers.size());
+                 }
+             } else if (!suppress_ui_copy && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
+diff --git a/src/mods/vr/IXRTrackingSystemHook.cpp b/src/mods/vr/IXRTrackingSystemHook.cpp
+index 29195fb0..0fa69d3a 100644
+--- a/src/mods/vr/IXRTrackingSystemHook.cpp
++++ b/src/mods/vr/IXRTrackingSystemHook.cpp
+@@ -46,6 +46,17 @@
+ #include "GearsEDayAim.hpp"
+ 
+ namespace {
++bool is_far_far_west_executable() {
++    static const bool result = []() {
++        const auto path = utility::get_module_pathw(utility::get_executable());
++        if (!path) { return false; }
++        const auto separator = path->find_last_of(L"\\/");
++        const auto filename = separator == std::wstring::npos ? *path : path->substr(separator + 1);
++        return _wcsicmp(filename.c_str(), L"FarFarWest-Win64-Shipping.exe") == 0;
++    }();
++    return result;
++}
++
+ bool is_deadzone_ue56_executable() {
+     static const bool result = []() {
+         const auto exe_path = utility::get_module_pathw(utility::get_executable());
+@@ -2020,10 +2031,17 @@ void IXRTrackingSystemHook::on_pre_engine_tick(sdk::UGameEngine* engine, float d
+         // so we dont want the UI off in nowhere land
+         if (data.was_called && std::chrono::high_resolution_clock::now() - data.last_update >= std::chrono::seconds(2)) {
+             data.was_called = false;
+-            vr->recenter_view();
+-            vr->set_pre_flattened_rotation(glm::identity<glm::quat>());
+-
+-            SPDLOG_INFO("IXRTrackingSystemHook: Recentering view because of timeout");
++            if (is_far_far_west_executable()) {
++                // A cinematic/loading gap is expected. Recentring here uses
++                // wherever the wearer happens to be looking at the end of the
++                // gap, overwriting their explicitly chosen facing direction.
++                // Keep both the calibrated yaw and pre-flattened basis intact.
++                SPDLOG_INFO("[FarFarVR][Origin] Preserved view alignment across camera-update timeout");
++            } else {
++                vr->recenter_view();
++                vr->set_pre_flattened_rotation(glm::identity<glm::quat>());
++                SPDLOG_INFO("IXRTrackingSystemHook: Recentering view because of timeout");
++            }
+         }
+     } else if (data.auto_enabled_decoupled_pitch) {
+         data.auto_enabled_decoupled_pitch = false;
+diff --git a/src/mods/vr/OverlayComponent.cpp b/src/mods/vr/OverlayComponent.cpp
+index fb098d5e..aab8bb77 100644
+--- a/src/mods/vr/OverlayComponent.cpp
++++ b/src/mods/vr/OverlayComponent.cpp
+@@ -2,6 +2,8 @@
+ #include <cmath>
+ #include <optional>
+ #include <string>
++#include <filesystem>
++#include <utility/Module.hpp>
+ 
+ #include <glm/gtx/intersect.hpp>
+ #include <imgui_internal.h>
+@@ -874,7 +876,11 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
+     // Halo's Electra movie target contains valid RGB but does not provide a
+     // compositor-safe alpha channel. Treat the eye-specific movie quad as
+     // opaque; otherwise OpenXR blends it away over the black projection layer.
+-    layer.layerFlags = vr->is_halo_electra_cinematic_active()
++    static const bool far_far_west = []() {
++        const auto path = utility::get_module_pathw(utility::get_executable());
++        return path && std::filesystem::path{*path}.filename() == L"FarFarWest-Win64-Shipping.exe";
++    }();
++    layer.layerFlags = (vr->is_halo_electra_cinematic_active() || (far_far_west && vr->is_using_2d_screen()))
+         ? 0
+         : XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+     layer.subImage.imageRect.offset.x = 0;
+diff --git a/src/mods/vr/runtimes/OpenXR.cpp b/src/mods/vr/runtimes/OpenXR.cpp
+index e2e53682..326d64b8 100644
+--- a/src/mods/vr/runtimes/OpenXR.cpp
++++ b/src/mods/vr/runtimes/OpenXR.cpp
+@@ -3869,12 +3869,22 @@ XrResult OpenXR::end_frame(const std::vector<XrCompositionLayerBaseHeader*>& qua
+         layer.views = projection_layer_views.data();
+         layer.layerFlags = 0;
+ 
+-        if (should_push_dummy) {
++        static const bool far_far_west = []() {
++            const auto path = utility::get_module_pathw(utility::get_executable());
++            return path && std::filesystem::path{*path}.filename() == L"FarFarWest-Win64-Shipping.exe";
++        }();
++        const auto cinema_only = far_far_west && VR::get()->is_using_2d_screen();
++        if (should_push_dummy && !cinema_only) {
+             layers.push_back((XrCompositionLayerBaseHeader*)&dummy_projection_layer);
+         }
+ 
+-        for (auto& l : projection_layer_cache) {
+-            layers.push_back((XrCompositionLayerBaseHeader*)&l);
++        // A cinema presentation must have no panoramic scene projection behind
++        // its finite quad. Opaque OpenXR composition supplies black outside it.
++        // Do not rely on clearing a borrowed scene texture on an earlier frame.
++        if (!cinema_only) {
++            for (auto& l : projection_layer_cache) {
++                layers.push_back((XrCompositionLayerBaseHeader*)&l);
++            }
+         }
+ 
+         for (auto& l : quad_layers) {   
