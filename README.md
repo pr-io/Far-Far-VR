@@ -8,6 +8,7 @@
 - [Far Far West on Steam](https://store.steampowered.com/app/3124540/Far_Far_West/)
 - [UEVR](https://github.com/praydog/UEVR)
 - [Flat2VR](https://flat2vr.com/)
+- [PR_VR on YouTube](https://www.youtube.com/@PR_VR)
 - [VR Buddies Discord](https://discord.gg/PcsYNa6MS9)
 
 Far Far VR is an unofficial **PCVR mod for [Far Far West on Steam](https://store.steampowered.com/app/3124540/Far_Far_West/)**, created and maintained by [**PR_VR**](https://www.youtube.com/@PR_VR). Powered by [UEVR](https://github.com/praydog/UEVR) created by praydog. It runs with the Windows PC version of the game and a supported PCVR headset; it is not a native standalone-headset app. 
