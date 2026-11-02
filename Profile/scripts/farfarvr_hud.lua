@@ -129,7 +129,7 @@ local function build(pawn,pc,hud)
             local slot=item.parent:AddChildToCanvas(item.wrapper)
             slot:SetAnchors(full);slot:SetAlignment(xy(0,0));slot:SetPosition(xy(0,0));slot:SetSize(xy(0,0));slot:SetZOrder(item.z)
             local live_slot=item.wrapper:AddChildToCanvas(source);live_slot:SetLayout(item.layout);live_slot:SetZOrder(item.z)
-            item.wrapper:SetVisibility(2)
+            item.wrapper:SetVisibility(4)
             item.clone=assert(api:spawn_object(find('Class /Script/UMG.Image'),s.host.WidgetTree))
             item.slot=s.reticle:AddChildToCanvas(item.clone);item.slot:SetAnchors(center)
             item.slot:SetAlignment(xy(item.layout.Alignment.X,item.layout.Alignment.Y));item.slot:SetZOrder(item.z)
@@ -145,7 +145,11 @@ local function build(pawn,pc,hud)
     if s.component:get_class():find_property('BackgroundColor') then s.component.BackgroundColor=native('CoreUObject.LinearColor',{R=0,G=0,B=0,A=0}) end
     s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=true;s.component:SetWindowFocusable(false)
     if s.component:get_class():find_property('bReceiveHardwareInput') then s.component.bReceiveHardwareInput=false end
-    s.component:SetWidget(s.host);s.component:InitWidget();s.component:UpdateRenderTarget();s.component:RequestRedraw()
+    s.component:SetWidget(s.host)
+    for _,method in ipairs({'InitWidget','UpdateRenderTarget'}) do
+        if s.component:get_class():find_function(method) then s.component[method](s.component) end
+    end
+    s.component:RequestRedraw()
     s.token=string.format('%.0f',s.component:get_address());bridge('Source',s.token)
     fault=nil;log('Dedicated 256x256 gun reticle compositor layer; crosshair and hit X share private artwork host; no information-HUD projection.')
 end
