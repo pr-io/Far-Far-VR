@@ -250,7 +250,7 @@ internal static class SettingsIsolation
 
         if (File.Exists(vrIni))
         {
-            File.Copy(vrIni, GameIniPath, true);
+            ApplyVrIni(vrIni, GameIniPath);
         }
         if (File.Exists(vrInput))
         {
@@ -260,6 +260,78 @@ internal static class SettingsIsolation
         {
             File.Copy(vrUser, GameUserSavePath, true);
         }
+    }
+
+    private static void ApplyVrIni(string vrIniSource, string targetIni)
+    {
+        // Enforces VR-critical settings (VSync=False, DynamicResolution=False, FrameRateLimit=0, VR Scalability)
+        // while preserving the user's desktop screen resolution and hardware audio/display ids.
+        if (!File.Exists(targetIni))
+        {
+            File.Copy(vrIniSource, targetIni, true);
+            return;
+        }
+
+        try
+        {
+            string desktopContent = File.ReadAllText(targetIni);
+            string vrContent = File.ReadAllText(vrIniSource);
+
+            // Replace or add VR-breaking settings in [/Script/Engine.GameUserSettings]
+            desktopContent = SetIniKey(desktopContent, "bUseVSync", "False");
+            desktopContent = SetIniKey(desktopContent, "bUseDynamicResolution", "False");
+            desktopContent = SetIniKey(desktopContent, "FrameRateLimit", "0.000000");
+
+            // Merge [ScalabilityGroups] from vrContent into desktopContent
+            int vrScalStart = vrContent.IndexOf("[ScalabilityGroups]", StringComparison.OrdinalIgnoreCase);
+            if (vrScalStart >= 0)
+            {
+                int vrScalEnd = vrContent.IndexOf('[', vrScalStart + 19);
+                string vrScalSection = vrScalEnd >= 0
+                    ? vrContent.Substring(vrScalStart, vrScalEnd - vrScalStart)
+                    : vrContent.Substring(vrScalStart);
+
+                int dScalStart = desktopContent.IndexOf("[ScalabilityGroups]", StringComparison.OrdinalIgnoreCase);
+                if (dScalStart >= 0)
+                {
+                    int dScalEnd = desktopContent.IndexOf('[', dScalStart + 19);
+                    desktopContent = dScalEnd >= 0
+                        ? desktopContent.Substring(0, dScalStart) + vrScalSection.TrimEnd() + Environment.NewLine + Environment.NewLine + desktopContent.Substring(dScalEnd)
+                        : desktopContent.Substring(0, dScalStart) + vrScalSection;
+                }
+                else
+                {
+                    desktopContent = vrScalSection + Environment.NewLine + desktopContent;
+                }
+            }
+
+            File.WriteAllText(targetIni, desktopContent);
+            LauncherLog.Write("Enforced VR graphics integrity: VSync=False, DynamicResolution=False, FrameRateLimit=0, VR Scalability applied.");
+        }
+        catch (Exception ex)
+        {
+            LauncherLog.Write("Could not merge VR ini settings: " + ex.Message + "; falling back to direct VR ini copy.");
+            File.Copy(vrIniSource, targetIni, true);
+        }
+    }
+
+    private static string SetIniKey(string content, string key, string value)
+    {
+        var regex = new System.Text.RegularExpressions.Regex($@"(?m)^\s*{System.Text.RegularExpressions.Regex.Escape(key)}\s*=.*$");
+        if (regex.IsMatch(content))
+        {
+            return regex.Replace(content, $"{key}={value}");
+        }
+        int section = content.IndexOf("[/Script/Engine.GameUserSettings]", StringComparison.OrdinalIgnoreCase);
+        if (section >= 0)
+        {
+            int lineEnd = content.IndexOf(Environment.NewLine, section);
+            if (lineEnd >= 0)
+            {
+                return content.Insert(lineEnd + Environment.NewLine.Length, $"{key}={value}" + Environment.NewLine);
+            }
+        }
+        return content + Environment.NewLine + $"{key}={value}";
     }
 
     private static void SaveActiveToVrSettings()

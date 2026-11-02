@@ -1,6 +1,7 @@
 -- Far Far VR Render Fix
 -- Disables broken screen-space refraction, distortion, chromatic aberration,
--- motion blur, depth-of-field, and lens flares in Native Stereo (SBS) for optimal VR performance and comfort.
+-- motion blur, depth-of-field, lens flares, screen-space reflections, film grain,
+-- and dynamic resolution in Native Stereo for optimal VR comfort and stereo visual integrity.
 local api = uevr.api
 local vr = uevr.params.vr
 
@@ -15,12 +16,19 @@ local function log_status(msg)
 end
 
 local vars_to_disable = {
-    'r.RefractionQuality',
-    'r.Distortion',
-    'r.SceneColorFringeQuality',
-    'r.MotionBlurQuality',
-    'r.DepthOfFieldQuality',
-    'r.LensFlareQuality'
+    'r.RefractionQuality',           -- Screen-space refraction (causes stereo left/right eye split)
+    'r.Distortion',                  -- Screen-space distortion (causes mismatched eye warp)
+    'r.SceneColorFringeQuality',      -- Chromatic aberration (conflicts with VR headset lens optics)
+    'r.MotionBlurQuality',           -- Motion blur quality (causes severe VR simulator sickness)
+    'r.MotionBlur.Amount',           -- Motion blur intensity
+    'r.DepthOfFieldQuality',         -- 2D depth of field (blurs stereoscopic vision unnaturally)
+    'r.DepthOfField.MaxSize',        -- Depth of field maximum blur size
+    'r.LensFlareQuality',            -- 2D lens flares (float unnaturally in stereo space)
+    'r.SSR.Quality',                 -- Screen-space reflections (causes left/right eye shimmering)
+    'r.FilmGrain',                   -- Film grain noise (causes static dancing noise on HMD displays)
+    'r.Tonemapper.GrainQuantization', -- Tonemapper grain quantization
+    'r.DynamicRes.OperationMode',    -- Dynamic resolution (causes projection jitter and compositor hitches)
+    'r.TemporalAA.Upsampling'        -- Temporal AA upsampling (causes viewport history artifacts)
 }
 
 local cached_vars = {}
@@ -55,7 +63,7 @@ local function apply_fixes()
 
     if not initialized and applied_count > 0 then
         initialized = true
-        log_status(string.format('Render fix initialized: %d/%d CVars set to 0', applied_count, #vars_to_disable))
+        log_status(string.format('Render fix initialized: %d VR-breaking CVars enforced to 0', applied_count))
     end
     return applied_count == #vars_to_disable
 end

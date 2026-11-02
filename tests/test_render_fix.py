@@ -17,8 +17,15 @@ class RenderFixTests(unittest.TestCase):
             ['r.Distortion'] = 1,
             ['r.SceneColorFringeQuality'] = 1,
             ['r.MotionBlurQuality'] = 4,
+            ['r.MotionBlur.Amount'] = 1,
             ['r.DepthOfFieldQuality'] = 2,
-            ['r.LensFlareQuality'] = 2
+            ['r.DepthOfField.MaxSize'] = 100,
+            ['r.LensFlareQuality'] = 2,
+            ['r.SSR.Quality'] = 3,
+            ['r.FilmGrain'] = 1,
+            ['r.Tonemapper.GrainQuantization'] = 1,
+            ['r.DynamicRes.OperationMode'] = 2,
+            ['r.TemporalAA.Upsampling'] = 1
         }
         manager = {
             find_variable = function(_, name)
@@ -60,8 +67,15 @@ class RenderFixTests(unittest.TestCase):
             ['r.Distortion'] = 1,
             ['r.SceneColorFringeQuality'] = 1,
             ['r.MotionBlurQuality'] = 1,
+            ['r.MotionBlur.Amount'] = 1,
             ['r.DepthOfFieldQuality'] = 1,
-            ['r.LensFlareQuality'] = 1
+            ['r.DepthOfField.MaxSize'] = 1,
+            ['r.LensFlareQuality'] = 1,
+            ['r.SSR.Quality'] = 1,
+            ['r.FilmGrain'] = 1,
+            ['r.Tonemapper.GrainQuantization'] = 1,
+            ['r.DynamicRes.OperationMode'] = 1,
+            ['r.TemporalAA.Upsampling'] = 1
         }
         manager_ready = false
         manager = {
