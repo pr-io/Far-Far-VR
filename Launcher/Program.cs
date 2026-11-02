@@ -66,9 +66,9 @@ internal sealed class LauncherForm : Form
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         SettingsIsolation.EnsureDesktopState();
-        Controls.Add(Theme.Label("FAR FAR VR",32,28,500,35,14,true));
-        Controls.Add(Theme.Label("Your next frontier.",30,75,690,57,32,true));
-        Controls.Add(Theme.Label("Far Far West, through a new lens.",33,137,690,32,12,false,true));
+        Controls.Add(Theme.Label("UNOFFICIAL FAR FAR WEST PCVR MOD",32,28,600,35,11,true,true));
+        Controls.Add(Theme.Label("Far Far VR",30,68,690,57,32,true));
+        Controls.Add(Theme.Label("Mod by PR_VR  |  Powered by UEVR created by praydog",33,130,690,32,11,false,true));
         var card = new Panel {Bounds=new Rectangle(32,200,696,178),BackColor=Theme.Surface,Padding=new Padding(24)};
         card.Controls.Add(Theme.Label("PCVR  /  FAR FAR WEST",24,20,640,24,9,true,true));
         card.Controls.Add(Theme.Label("One click to the West.",22,51,640,40,20,true));
@@ -145,19 +145,19 @@ internal sealed class LauncherForm : Form
             Process.Start(new ProcessStartInfo("https://discord.gg/PcsYNa6MS9") { UseShellExecute = true });
         };
 
-                var sep3 = Theme.Label("•", 0, 0, 0, 0, 9, false, true);
+        var sep3 = Theme.Label("•", 0, 0, 0, 0, 9, false, true);
         sep3.AutoSize = true;
         sep3.Margin = new Padding(0, 0, 10, 0);
 
         var uevr = new LinkLabel
         {
-            Text = "Powered by UEVR created by praydog",
+            Text = "UEVR",
             Font = new Font("Segoe UI", 9),
             LinkColor = Theme.Accent,
             ActiveLinkColor = Theme.Text,
             LinkBehavior = LinkBehavior.HoverUnderline,
             AutoSize = true,
-            Margin = new Padding(0),
+            Margin = new Padding(0, 0, 10, 0),
             UseMnemonic = false
         };
         toolTip.SetToolTip(uevr, "Powered by UEVR created by praydog: https://github.com/praydog/UEVR");
@@ -166,7 +166,28 @@ internal sealed class LauncherForm : Form
             Process.Start(new ProcessStartInfo("https://github.com/praydog/UEVR") { UseShellExecute = true });
         };
 
-        footer.Controls.AddRange([settingsLabel, sep1, yt, sep2, discord, sep3, uevr]);
+        var sep4 = Theme.Label("•", 0, 0, 0, 0, 9, false, true);
+        sep4.AutoSize = true;
+        sep4.Margin = new Padding(0, 0, 10, 0);
+
+        var flat2vr = new LinkLabel
+        {
+            Text = "Flat2VR",
+            Font = new Font("Segoe UI", 9),
+            LinkColor = Theme.Accent,
+            ActiveLinkColor = Theme.Text,
+            LinkBehavior = LinkBehavior.HoverUnderline,
+            AutoSize = true,
+            Margin = new Padding(0),
+            UseMnemonic = false
+        };
+        toolTip.SetToolTip(flat2vr, "Flat2VR Community: https://beacons.ai/flat2vr");
+        flat2vr.LinkClicked += (_, _) => {
+            LauncherLog.Write("Opening Flat2VR link.");
+            Process.Start(new ProcessStartInfo("https://beacons.ai/flat2vr") { UseShellExecute = true });
+        };
+
+        footer.Controls.AddRange([settingsLabel, sep1, yt, sep2, discord, sep3, uevr, sep4, flat2vr]);
         Controls.Add(footer);
         Controls.AddRange([start,options,progress,log]);
         sessionTimer.Tick+=(_,_)=>{PollSession();PollUpdateCommand();};sessionTimer.Start();
