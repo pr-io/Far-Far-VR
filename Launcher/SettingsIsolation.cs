@@ -233,6 +233,24 @@ internal static class SettingsIsolation
             LauncherLog.Write("Could not delete session state file: " + ex.Message);
         }
 
+        try
+        {
+            var setup = Setup.Load();
+            if (File.Exists(setup.GamePath))
+            {
+                string gameOpenXr = Path.Combine(Path.GetDirectoryName(setup.GamePath)!, "openxr_loader.dll");
+                if (File.Exists(gameOpenXr))
+                {
+                    File.Delete(gameOpenXr);
+                    LauncherLog.Write("Cleaned up session openxr_loader.dll from game binary folder.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LauncherLog.Write("Could not clean up session openxr_loader.dll: " + ex.Message);
+        }
+
         LauncherLog.Write("Exited VR session. Desktop settings and controller bindings restored for normal gameplay.");
     }
 

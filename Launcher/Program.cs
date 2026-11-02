@@ -344,6 +344,22 @@ internal static class GameLaunch
         foreach (string file in new[] { GamePath, BackendPath, Path.Combine(Path.GetDirectoryName(BackendPath)!, "LuaVR.dll"), Path.Combine(Path.GetDirectoryName(BackendPath)!, "openxr_loader.dll") })
             if (!File.Exists(file)) throw new IOException("A required game or VR file is missing. See the launcher log for its location: " + file);
 
+        string gameBin = Path.GetDirectoryName(GamePath)!;
+        string gameOpenXr = Path.Combine(gameBin, "openxr_loader.dll");
+        string runtimeOpenXr = Path.Combine(Path.GetDirectoryName(BackendPath)!, "openxr_loader.dll");
+        if (File.Exists(runtimeOpenXr) && !File.Exists(gameOpenXr))
+        {
+            try
+            {
+                File.Copy(runtimeOpenXr, gameOpenXr, overwrite: true);
+                LauncherLog.Write($"Deployed openxr_loader.dll to game binary folder: {gameOpenXr}");
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Write($"Warning: Could not copy openxr_loader.dll to game folder: {ex.Message}");
+            }
+        }
+
         Process? game = FindGame(GamePath);
         if (game == null)
         {
@@ -395,6 +411,11 @@ internal static class GameLaunch
             }
             status.Report("Changing to VR mode…");
             DateTime injected = DateTime.UtcNow;
+            if (File.Exists(runtimeOpenXr))
+            {
+                try { NativeLoader.Load(game, runtimeOpenXr); }
+                catch (Exception ex) { LauncherLog.Write($"Pre-loading openxr_loader.dll: {ex.Message}"); }
+            }
             NativeLoader.Load(game, BackendPath);
             LauncherLog.Write("Backend module confirmed in the game.");
             status.Report("Changing to VR mode… Finishing startup.");
