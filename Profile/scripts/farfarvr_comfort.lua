@@ -2,8 +2,8 @@
 local api,vr=uevr.api,uevr.params.vr
 local saved,mode,fault,status_time=nil,'gameplay',nil,0
 local journal='farfarvr-comfort-restore.txt'
-local allowed={VR_AimMethod=true,UI_FollowView=true,VR_DecoupledPitchUIAdjust=true,VR_2DScreenMode=true,VR_RoomscaleMovement=true,VR_NativeStereoFix=true,VR_DecoupledPitch=true}
-local overridden={VR_AimMethod='0',UI_FollowView='false',VR_DecoupledPitchUIAdjust='false',VR_2DScreenMode='true',VR_RoomscaleMovement='false',VR_NativeStereoFix='false',VR_DecoupledPitch='false'}
+local allowed={VR_MovementOrientation=true,VR_AimMethod=true,UI_FollowView=true,VR_DecoupledPitchUIAdjust=true,VR_2DScreenMode=true,VR_RoomscaleMovement=true,VR_NativeStereoFix=true,VR_DecoupledPitch=true}
+local overridden={VR_MovementOrientation='0',VR_AimMethod='0',UI_FollowView='false',VR_DecoupledPitchUIAdjust='false',VR_2DScreenMode='true',VR_RoomscaleMovement='false',VR_NativeStereoFix='false',VR_DecoupledPitch='false'}
 local baseline={}
 local function recover()
     vr.set_mod_value('VR_Compatibility_SplitScreen','false')
@@ -64,6 +64,7 @@ local function context(pc)
     if name:find('BP_LoadingScreen_C ',1,true) or (target and target:get_full_name():find('BP_LoadingScreen_C ',1,true)) then return 'map_loading' end
     if pc.bShowMouseCursor or not pawn or name:find('BP_TitleScreen_C ',1,true) then return 'menu' end
     if name:find('BP_Mount_C ',1,true) or (target and target:get_full_name():find('BP_Mount_C ',1,true)) then return 'riding' end
+    if flag(pawn,'isPlayingEmote') then return 'emote' end
     return 'gameplay'
 end
 local function update(pc)
@@ -77,7 +78,8 @@ local function update(pc)
     mode=next_mode
     if mode~='gameplay' then
         saved={VR_AimMethod=vr:get_mod_value('VR_AimMethod')}
-        if mode~='riding' then
+        if mode=='riding' then saved.VR_MovementOrientation=vr:get_mod_value('VR_MovementOrientation') end
+        if mode~='riding' and mode~='emote' then
             saved.UI_FollowView=vr:get_mod_value('UI_FollowView')
             saved.VR_DecoupledPitchUIAdjust=vr:get_mod_value('VR_DecoupledPitchUIAdjust')
         end
@@ -91,7 +93,8 @@ local function update(pc)
         end
         checkpoint()
         vr.set_mod_value('VR_AimMethod','0')
-        if mode~='riding' then
+        if mode=='riding' then vr.set_mod_value('VR_MovementOrientation','0') end
+        if mode~='riding' and mode~='emote' then
             vr.set_mod_value('UI_FollowView','false')
             vr.set_mod_value('VR_DecoupledPitchUIAdjust','false')
         end
@@ -117,14 +120,17 @@ end
 -- viewport history; this is a candidate guard for the reported combat crop.
 -- Do not change AA choice,
 -- render resolution, TSR, FXAA, or post-process materials.
-local taa_override,taa_status,taa_fault=nil,'Waiting for console variables',false
+local taa_override,taa_status,taa_retry=nil,'Waiting for console variables',0
 local function restore_taa()
     if taa_override then
-        if taa_override.variable:get_int()==0 then taa_override.variable:set_int(taa_override.original) end
+        local previous=taa_override
         taa_override=nil
+        if previous.variable:get_int()==0 then previous.variable:set_int(previous.original) end
     end
 end
 local function update_taa()
+    -- No graphics CVar access is needed while the headset/runtime is idle.
+    if mode=='idle' then restore_taa(); taa_status='Original AA scaling'; return end
     local manager=api:get_console_manager()
     local method=manager and manager:find_variable('r.AntiAliasingMethod')
     local upscale=manager and manager:find_variable('r.TemporalAA.Upsampling')
@@ -143,10 +149,11 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(_,dt)
     local ok,err=pcall(function()
         update(api:get_player_controller(0))
         -- A rejected graphics CVar must not disable camera/context handling.
-        if not taa_fault then
+        taa_retry=math.max(0,taa_retry-dt)
+        if taa_retry==0 then
             local taa_ok,taa_error=pcall(update_taa)
             if not taa_ok then
-                taa_fault=true
+                taa_retry=1
                 pcall(restore_taa)
                 taa_status='ERROR in TAA scaling guard: '..tostring(taa_error)
                 fs.write('farfarvr-taa-status.txt',taa_status)
@@ -162,7 +169,20 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(_,dt)
 end)
 uevr.sdk.callbacks.on_post_engine_tick(function()
     if fault then return end
-    local ok,err=pcall(function() update(api:get_player_controller(0)) end)
+    local ok,err=pcall(function()
+        update(api:get_player_controller(0))
+        -- Game settings/camera effects can rewrite CVars during Tick. Recheck
+        -- before rendering so that rewrite cannot bypass the TAA guard for a frame.
+        if taa_retry==0 then
+            local taa_ok,taa_error=pcall(update_taa)
+            if not taa_ok then
+                taa_retry=1
+                pcall(restore_taa)
+                taa_status='ERROR in TAA scaling guard: '..tostring(taa_error)
+                fs.write('farfarvr-taa-status.txt',taa_status)
+            end
+        end
+    end)
     if not ok then fault=tostring(err); restore(); restore_taa(); fs.write('farfarvr-comfort-status.txt','ERROR after tick: '..fault) end
 end)
 uevr.sdk.callbacks.on_script_reset(function()

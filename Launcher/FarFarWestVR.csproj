@@ -9,7 +9,7 @@
     <AssemblyName>FarFarWestVR</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
+    <SelfContained>false</SelfContained>
     <DebugType>none</DebugType>
   </PropertyGroup>
 </Project>

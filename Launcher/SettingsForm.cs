@@ -20,52 +20,27 @@ internal sealed class SetupForm : Form
         Controls.Add(Theme.Label("SETTINGS",30,24,600,24,10,true,true));
         Controls.Add(Theme.Label("Make VR feel right.",28,51,700,45,24,true));
         Controls.Add(content);
-        foreach (string name in new[] {"Setup","Comfort","Calibration","Input","HUD"}) AddPage(name);
+        foreach (string name in new[] {"Setup","Comfort","Calibration","Input","HUD","Display"}) AddPage(name);
         var game = Folder("Far Far West installation",setup.GameFolder,pages["Setup"]);
         var runtime = Folder("VR runtime",setup.RuntimeFolder,pages["Setup"]);
         var detect = MakeButton("Find game in Steam",new Rectangle(0,180,220,40));
         detect.Click += (_,_) => { string? found=Setup.DetectGame(); if(found!=null) game.Text=found; else MessageBox.Show(this,"Game not found. Select its installation folder with Browse."); };
         pages["Setup"].Controls.Add(detect);
-        var steamStatus = Theme.Label(Setup.SteamStatus(),0,205,575,25,9,false,true);
-        pages["Setup"].Controls.Add(steamStatus);
-        var runtimeStatus = Theme.Label(Setup.OpenXrStatus(),0,236,575,48,9,false,true);
-        pages["Setup"].Controls.Add(runtimeStatus);
-        var checkRuntime = MakeButton("Check OpenXR runtime",new Rectangle(0,288,220,38));
-        checkRuntime.Click += (_,_) =>
-        {
-            try { runtimeStatus.Text=Setup.OpenXrStatus(); }
-            catch(Exception ex) { runtimeStatus.Text="Could not check the active OpenXR runtime: "+ex.Message; }
-        };
-        pages["Setup"].Controls.Add(checkRuntime);
-        pages["Setup"].Controls.Add(Theme.Label($"Required backend SHA-256: {Setup.CurrentBackendHash}\nThe complete runtime must be supplied with the package. Generic UEVR builds are rejected.",235,288,340,50,8,false,true));
-        var close = new CheckBox { Text="Close launcher after startup", Checked=setup.CloseAfterLaunch, Bounds=new Rectangle(0,345,540,32), ForeColor=Theme.Text };
-        pages["Setup"].Controls.Add(close);
-        pages["Setup"].Controls.Add(Theme.Label("In the headset, open the in-game menu with both thumbsticks or Insert. Use its Calibration page to align height and position.",0,382,575,52,9,false,true));
+        var download = new LinkLabel { Text="Get compatible runtime", Bounds=new Rectangle(250,190,290,30), LinkColor=Theme.Accent, ActiveLinkColor=Theme.Text };
+        download.LinkClicked += (_,_) => Process.Start(new ProcessStartInfo("https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch"){UseShellExecute=true});
+        pages["Setup"].Controls.Add(download);
+        pages["Setup"].Controls.Add(Theme.Label("The launcher stays open. Once VR is ready, Far Far VR settings appear in your headset.",0,245,575,56,10,false,true));
+        pages["Setup"].Controls.Add(Theme.Label("Connect your headset to PCVR before starting.\nOpen VR settings by holding Start for 0.5 seconds or pressing Insert.",0,310,575,80,10,false,true));
         string profile=Path.Combine(Setup.ProfileFolder,"config.txt");
         string source=File.Exists(profile)?profile:Path.Combine(AppContext.BaseDirectory,"Profile","config.txt");
         string[] original=File.ReadAllLines(source);
         string Read(string key) => original.FirstOrDefault(line=>line.StartsWith(key+"=",StringComparison.Ordinal))?.Split('=',2)[1] ?? throw new IOException("Profile setting missing: "+key);
         var fields=JsonSerializer.Deserialize<SettingsField[]>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"Profile","VRSettings.json")))!;
-        var positions=new Dictionary<string,int>{{"Comfort",60},{"Calibration",138},{"Input",124},{"HUD",60}};
+        var positions=new Dictionary<string,int>{{"Comfort",60},{"Calibration",138},{"Input",60},{"HUD",60},{"Display",60}};
         pages["Comfort"].Controls.Add(Theme.Label("Turning, movement and performance feedback.",0,8,580,45,11,false,true));
+        pages["Display"].Controls.Add(Theme.Label("Frame rate and desktop mirror. Headset resolution and refresh rate stay in the PCVR app.",0,8,580,45,10,false,true));
+        pages["Input"].Controls.Add(Theme.Label("The corrected Touch button mapping is preserved.",0,8,580,45,11,false,true));
         pages["HUD"].Controls.Add(Theme.Label("Place the game interface and settings menu in VR.",0,8,580,45,11,false,true));
-        pages["Input"].Controls.Add(Theme.Label("The corrected Touch button map is included. Apply the optional game-save overrides here.",0,8,580,45,10,false,true));
-        var applyBindings=MakeButton("Apply corrected game controls",new Rectangle(0,62,300,42));
-        applyBindings.Click+=(_,_) =>
-        {
-            if(MessageBox.Show(this,"This updates four Far Far West input bindings and creates a timestamped backup of the current save. Close the game first. Continue?","Apply controller mappings",MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes)return;
-            try
-            {
-                string? backup=ControllerBindings.Apply();
-                string message=backup is null?"The corrected controller mappings are already installed. No changes were made.":$"Controller mappings applied. Original save backed up to:\n{backup}";
-                MessageBox.Show(this,message,"Far Far VR",MessageBoxButtons.OK,MessageBoxIcon.Information);
-            }
-            catch(Exception ex)
-            {
-                MessageBox.Show(this,ex.Message,"Controller setup needs attention",MessageBoxButtons.OK,MessageBoxIcon.Warning);
-            }
-        };
-        pages["Input"].Controls.Add(applyBindings);
         pages["Calibration"].Controls.Add(Theme.Label("Recenter view changes direction, not height.\nFor current-pose calibration, use Calibration in the in-game menu.",0,8,580,54,10,false,true));
         var reset=MakeButton("Reset height & camera",new Rectangle(0,77,250,42));
         reset.Click += (_,_) => { foreach(var key in new[]{"VR_CameraUpOffset","VR_CameraForwardOffset","VR_CameraRightOffset"}) numbers[key].Value=0; };
@@ -104,8 +79,7 @@ internal sealed class SetupForm : Form
         {
             try
             {
-                var candidate=new Setup {GameFolder=game.Text.Trim(),RuntimeFolder=runtime.Text.Trim(),CloseAfterLaunch=close.Checked}; candidate.ValidateGame();
-                if(!string.IsNullOrWhiteSpace(candidate.RuntimeFolder)&&File.Exists(Path.Combine(candidate.RuntimeFolder,"UEVRBackend.dll")))candidate.ValidateRuntime();
+                var candidate=new Setup {GameFolder=game.Text.Trim(),RuntimeFolder=runtime.Text.Trim(),CloseAfterLaunch=false}; candidate.Validate();
                 var changes=readControls.Where(pair=>pair.Value()!=originalControls[pair.Key]).ToDictionary(pair=>pair.Key,pair=>pair.Value());
                 if(changes.Count>0)
                 {
@@ -127,7 +101,7 @@ internal sealed class SetupForm : Form
     private void AddPage(string name)
     {
         var page=new Panel {Dock=DockStyle.Fill,AutoScroll=true,BackColor=Theme.Background,Visible=false};pages[name]=page;content.Controls.Add(page);
-        var button=MakeButton(name,new Rectangle(28,114+navigation.Count*54,152,43)); button.Tag=name;button.Click+=(_,_)=>ShowPage(name);navigation.Add(button);Controls.Add(button);
+        var button=MakeButton(name=="HUD"?"Interface":name,new Rectangle(28,114+navigation.Count*54,152,43)); button.Tag=name;button.Click+=(_,_)=>ShowPage(name);navigation.Add(button);Controls.Add(button);
     }
     private void ShowPage(string name){foreach(var pair in pages)pair.Value.Visible=pair.Key==name;foreach(var b in navigation){b.BackColor=(string)b.Tag! ==name?Theme.Accent:Theme.Surface;b.ForeColor=(string)b.Tag! ==name?Theme.Background:Theme.Text;}}
     private TextBox Folder(string label,string value,Panel page)

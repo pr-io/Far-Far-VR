@@ -33,6 +33,8 @@
 /Launcher.Tests/obj/
 /tests/bin/
 /tests/obj/
+/tests/*/bin/
+/tests/*/obj/
 /recovery/
 /runtime/
 /__pycache__/

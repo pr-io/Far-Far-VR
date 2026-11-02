@@ -29,20 +29,22 @@
     "key": "VR_MovementOrientation",
     "label": "Movement direction",
     "kind": "choice",
-    "default": 0,
+    "default": 1,
     "choices": [
       "Game camera",
       "Headset",
       "Right hand",
       "Left hand"
-    ]
+    ],
+    "description": "Headset follows where you look. The mod keeps native horse steering while riding."
   },
   {
     "group": "Comfort",
     "key": "VR_RoomscaleMovement",
     "label": "Roomscale movement",
     "kind": "bool",
-    "default": false
+    "default": false,
+    "description": "Physical movement can also move the character. Leave this at its current value to preserve your setup."
   },
   {
     "group": "Comfort",
@@ -52,11 +54,34 @@
     "default": true
   },
   {
-    "group": "Comfort",
+    "group": "Display",
     "key": "VR_ShowFPSOverlay",
     "label": "Show frame rate",
     "kind": "bool",
     "default": false
+  },
+  {
+    "group": "Display",
+    "key": "OpenXR_ResolutionScale",
+    "label": "Resolution scale",
+    "kind": "float",
+    "default": 0.8,
+    "min": 0.5,
+    "max": 1.5,
+    "description": "Adjusts the VR render resolution scale. Lower values improve frame rate."
+  },
+  {
+    "group": "Display",
+    "key": "VR_SynchronizationMode",
+    "label": "Frame synchronization",
+    "kind": "choice",
+    "default": 1,
+    "choices": [
+      "Early",
+      "Late",
+      "Very Late"
+    ],
+    "description": "OpenXR frame pacing mode. Late improves frame stability in heavy scenes."
   },
   {
     "group": "Calibration",
@@ -66,7 +91,8 @@
     "default": 0,
     "min": -100,
     "max": 100,
-    "unit": "cm"
+    "unit": "cm",
+    "description": "Manual camera adjustment. Calibration changes the tracking origin for this session."
   },
   {
     "group": "Calibration",
@@ -95,7 +121,8 @@
     "kind": "float",
     "default": 1,
     "min": 0.5,
-    "max": 2
+    "max": 2,
+    "description": "Changes the perceived size of the world. A value of 1 is neutral."
   },
   {
     "group": "Input",
@@ -110,7 +137,8 @@
       "Left hand",
       "Two hands - right",
       "Two hands - left"
-    ]
+    ],
+    "description": "Your established gun aiming mode. The mod temporarily manages the camera for horses, emotes and cutscenes."
   },
   {
     "group": "Input",
@@ -136,7 +164,8 @@
     "key": "VR_AimInterp",
     "label": "Smooth controller aiming",
     "kind": "bool",
-    "default": true
+    "default": true,
+    "description": "Smooths tracked controller aiming. No button bindings are changed."
   },
   {
     "group": "HUD",
@@ -152,7 +181,8 @@
     "kind": "float",
     "default": 2,
     "min": 0.5,
-    "max": 5
+    "max": 5,
+    "description": "The game information panel. Gun crosshair, hit X, POIs and POV effects keep their own placement."
   },
   {
     "group": "HUD",
@@ -161,7 +191,8 @@
     "kind": "float",
     "default": 2,
     "min": 0.5,
-    "max": 4
+    "max": 4,
+    "description": "The game information panel size. The separate gun reticle and POV effects remain independent."
   },
   {
     "group": "HUD",
@@ -188,7 +219,8 @@
     "default": 1.75,
     "min": 0.5,
     "max": 4,
-    "unit": "m"
+    "unit": "m",
+    "description": "Distance of this Far Far VR menu. It opens in front of your view."
   },
   {
     "group": "HUD",
@@ -197,6 +229,27 @@
     "kind": "float",
     "default": 2,
     "min": 0.5,
-    "max": 4
+    "max": 4,
+    "description": "Size of this Far Far VR menu only."
+  },
+  {
+    "group": "Display",
+    "key": "VR_DesktopSpectatorViewMode",
+    "label": "Desktop mirror",
+    "kind": "choice",
+    "default": 0,
+    "choices": [
+      "Game and interface",
+      "Game only"
+    ],
+    "description": "Changes the desktop spectator image, not the headset view."
+  },
+  {
+    "group": "Display",
+    "key": "VR_UncapFramerate",
+    "label": "Uncap engine framerate",
+    "kind": "bool",
+    "default": false,
+    "description": "Allows exceeding default engine framerate caps. Leave disabled to prevent frame pacing stalls."
   }
-]
+]

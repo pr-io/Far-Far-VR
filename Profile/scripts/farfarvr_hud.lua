@@ -1,12 +1,22 @@
--- Original animated crosshair on an independent compositor aim layer.
+-- Dedicated gun-following compositor layer. Information HUD placement is independent.
 local api,vr=uevr.api,uevr.params.vr
 local state,fault,last_pawn,title_camera,title_location,title_owner
 local scan_time,status_time=0,0
+local retry_time,stage=0,'startup'
+local recover_hud
+local obj_cache = {}
 local function find(path)
-    local obj=api:find_uobject(path)
-    assert(obj,'Missing '..path)
+    local obj = obj_cache[path]
+    if not obj then
+        obj = api:find_uobject(path)
+        assert(obj, 'Missing '..path)
+        obj_cache[path] = obj
+    end
     return obj
 end
+local function safe_full_name(o) return o:get_full_name() end
+local function safe_class(o) return o:get_class() end
+local function safe_find_is_drawn(cls) return cls:find_property('isDrawn') end
 local function native(path,values)
     local obj=StructObject.new(find('ScriptStruct /Script/'..path))
     for key,value in pairs(values) do obj[key]=value end
@@ -15,7 +25,11 @@ end
 local function v(x,y,z) return native('CoreUObject.Vector',{X=x,Y=y,Z=z}) end
 local identity=native('CoreUObject.Transform',{Translation={X=0,Y=0,Z=0},Rotation={X=0,Y=0,Z=0,W=1},Scale3D={X=1,Y=1,Z=1}})
 local function log(s) uevr.params.functions.log_info('[Far Far VR HUD] '..s) end
-local function alive(o) return o~=nil and UEVR_UObjectHook.exists(o) end
+local function alive(o)
+    if o==nil then return false end
+    local ok,exists=pcall(UEVR_UObjectHook.exists,o)
+    return ok and exists
+end
 local function restore_title()
     if title_camera and (alive(title_camera) or api:get_local_pawn(0)==title_owner) then
         pcall(function() title_camera:K2_SetRelativeLocation(title_location,false,{},true) end)
@@ -32,46 +46,33 @@ local function copy_layout(slot)
         Anchors={Minimum={X=l.Anchors.Minimum.X,Y=l.Anchors.Minimum.Y},Maximum={X=l.Anchors.Maximum.X,Y=l.Anchors.Maximum.Y}},
         Alignment={X=l.Alignment.X,Y=l.Alignment.Y}})
 end
+local function bridge(key,value) vr.set_mod_value('VR_FarFarReticle'..key,value) end
 local function cleanup()
-    local s=state; state=nil
-    if not s then return end
-    if alive(s.canvas) then pcall(function() s.canvas:RemoveFromParent() end) end
-    if alive(s.head) then pcall(function() UEVR_UObjectHook.remove_motion_controller_state(s.head); s.head:K2_DestroyComponent(s.pawn) end) end
+    pcall(bridge,'Source','0');pcall(bridge,'Active','false');pcall(bridge,'Target','')
+    local s=state;state=nil;if not s then return end
     for _,item in ipairs(s.images or {}) do
         if alive(item.source) and alive(item.parent) then pcall(function()
-            item.source:RemoveFromParent()
-            local slot=item.parent:AddChildToCanvas(item.source)
-            slot:SetLayout(item.layout); slot:SetZOrder(item.z)
+            item.source:RemoveFromParent();local slot=item.parent:AddChildToCanvas(item.source)
+            slot:SetLayout(item.layout);slot:SetZOrder(item.z)
         end) end
         if alive(item.wrapper) then pcall(function() item.wrapper:RemoveFromParent() end) end
     end
-end
-local function marker_target(hit)
-    local dx,dy,dz=hit.point.X-hit.start.X,hit.point.Y-hit.start.Y,hit.point.Z-hit.start.Z
-    local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
-    if distance<1 then return nil end
-    local pos=v(hit.start.X+dx/distance*275,hit.start.Y+dy/distance*275,hit.start.Z+dz/distance*275)
-    local rot=native('CoreUObject.Rotator',{Pitch=math.deg(math.atan(dz,math.sqrt(dx*dx+dy*dy))),Yaw=math.deg(math.atan(dy,dx)),Roll=0})
-    return pos,rot
+    if alive(s.component) then pcall(function() s.component:SetWidget(nil);s.component:K2_DestroyComponent(s.pawn) end) end
+    if alive(s.host) then pcall(function() s.host:RemoveFromParent() end) end
+    for _,anchor in ipairs({s.head,s.hand}) do
+        if alive(anchor) then pcall(function()
+            UEVR_UObjectHook.remove_motion_controller_state(anchor);anchor:K2_DestroyComponent(s.pawn)
+        end) end
+    end
 end
 local function show_marker(s,visible)
-    if s.showing==visible then return end
+    if s.showing==visible and s.originals_showing==not visible then return end
     s.reticle:SetVisibility(visible and 4 or 2)
     for _,item in ipairs(s.images) do item.wrapper:SetVisibility(visible and 2 or 4) end
-    s.showing=visible
-end
-local function project(hp,hr,point,distance,height,xoffset,yoffset,logical_height)
-    local p,y,r=math.rad(hr.Pitch),math.rad(hr.Yaw),math.rad(hr.Roll)
-    local cp,sp,cy,sy,cr,sr=math.cos(p),math.sin(p),math.cos(y),math.sin(y),math.cos(r),math.sin(r)
-    local dx,dy,dz=point.X-hp.X,point.Y-hp.Y,point.Z-hp.Z
-    local forward=dx*cp*cy+dy*cp*sy+dz*sp
-    if forward<=1 or height<=0 then return nil end
-    local right=dx*(sr*sp*cy-cr*sy)+dy*(sr*sp*sy+cr*cy)-dz*sr*cp
-    local up=-dx*(cr*sp*cy+sr*sy)+dy*(cy*sr-cr*sp*sy)+dz*cr*cp
-    return (right/forward*distance-xoffset)/height*logical_height,
-        -(up/forward*distance-yoffset)/height*logical_height
+    s.showing=visible;s.originals_showing=not visible;s.dirty=true
 end
 local function sync_images(s)
+    local origin=s.images[1].layout.Offsets
     for _,item in ipairs(s.images) do
         local src,clone=item.source,item.clone
         -- Share the actual brush resource, including animated material instances.
@@ -82,29 +83,39 @@ local function sync_images(s)
         clone:SetRenderTransform(src.RenderTransform)
         clone:SetVisibility(src:GetVisibility())
         local l=src.Slot.LayoutData
-        item.slot:SetSize(xy(l.Offsets.Right,l.Offsets.Bottom))
-        item.slot:SetPosition(xy(l.Offsets.Left-item.layout.Offsets.Left,l.Offsets.Top-item.layout.Offsets.Top))
+        local width,height=l.Offsets.Right,l.Offsets.Bottom
+        if item.width~=width or item.height~=height then
+            item.slot:SetSize(xy(width,height));item.width,item.height=width,height
+        end
+        -- All three images are siblings in the original aiming panel. Retain
+        -- their offsets relative to Crosshair_Top; independently zeroing each
+        -- image would misalign hits authored with a different size/alignment.
+        local x,y=l.Offsets.Left-origin.Left,l.Offsets.Top-origin.Top
+        if item.x~=x or item.y~=y then
+            item.slot:SetPosition(xy(x,y));item.x,item.y=x,y
+        end
     end
 end
 local function build(pawn,pc,hud)
-    local s={pawn=pawn,hud=hud,elapsed=0,animation_time=0,settings_time=1,weapon_scan=1,trace_count=0,images={},showing=false}
-    state=s
+    local s={pawn=pawn,pc=pc,hud=hud,root=hud.WidgetTree.RootWidget,images={},showing=false,animation_time=0,dirty=true,updates=0};state=s
     UEVR_UObjectHook.activate()
+    -- Match the accepted per-view aim reference. These private anchors read
+    -- tracking; they never change the weapon, game camera, or locomotion.
     s.head=assert(pawn:AddComponentByClass(find('Class /Script/Engine.SceneComponent'),true,identity,false))
-    local tracking=assert(UEVR_UObjectHook.get_or_add_motion_controller_state(s.head))
-    tracking:set_hand(2); tracking:set_permanent(true)
-    s.layout=find('Class /Script/UMG.WidgetLayoutLibrary'):get_class_default_object()
+    local head_tracking=assert(UEVR_UObjectHook.get_or_add_motion_controller_state(s.head))
+    head_tracking:set_hand(2);head_tracking:set_permanent(true)
+    s.hand=assert(pawn:AddComponentByClass(find('Class /Script/Engine.SceneComponent'),true,identity,false))
+    local hand_tracking=assert(UEVR_UObjectHook.get_or_add_motion_controller_state(s.hand))
+    hand_tracking:set_hand(1);hand_tracking:set_permanent(true)
+    local library=find('Class /Script/UMG.WidgetBlueprintLibrary'):get_class_default_object()
+    local host_class=find('WidgetBlueprintGeneratedClass /Game/Interfaces/UI_ScreenFlashes.UI_ScreenFlashes_C')
+    s.host=assert(library:Create(pc,host_class,pc),'Private reticle host unavailable');s.host:StopAllAnimations()
+    s.canvas=assert(api:spawn_object(find('Class /Script/UMG.CanvasPanel'),s.host.WidgetTree))
+    s.host.WidgetTree.RootWidget=s.canvas;s.reticle=s.canvas
     local center=native('Slate.Anchors',{Minimum={X=.5,Y=.5},Maximum={X=.5,Y=.5}})
     local full=native('Slate.Anchors',{Minimum={X=0,Y=0},Maximum={X=1,Y=1}})
-    s.canvas=assert(api:spawn_object(find('Class /Script/UMG.CanvasPanel'),hud.WidgetTree),'Crosshair canvas unavailable')
-    local layer_slot=hud.WidgetTree.RootWidget:AddChildToCanvas(s.canvas)
-    layer_slot:SetAnchors(full); layer_slot:SetPosition(xy(0,0)); layer_slot:SetSize(xy(0,0)); layer_slot:SetZOrder(100)
-    s.canvas:SetVisibility(4)
-    s.reticle=assert(api:spawn_object(find('Class /Script/UMG.CanvasPanel'),hud.WidgetTree))
-    s.reticle_slot=s.canvas:AddChildToCanvas(s.reticle)
-    s.reticle_slot:SetAnchors(center); s.reticle_slot:SetAlignment(xy(.5,.5)); s.reticle_slot:SetSize(xy(256,256))
-    s.reticle:SetVisibility(2)
-    for _,key in ipairs({'Crosshair_Top'}) do
+    -- The clones belong only to the PRIVATE offscreen widget, never UI_Player.
+    for _,key in ipairs({'Crosshair_Top','HitImage','HitShield'}) do
         local source=hud[key]
         if source then
             local old=source.Slot
@@ -112,90 +123,116 @@ local function build(pawn,pc,hud)
             s.images[#s.images+1]=item
             item.wrapper=assert(api:spawn_object(find('Class /Script/UMG.CanvasPanel'),hud.WidgetTree))
             source:RemoveFromParent()
-            local wrap_slot=item.parent:AddChildToCanvas(item.wrapper)
-            wrap_slot:SetAnchors(full); wrap_slot:SetAlignment(xy(0,0)); wrap_slot:SetPosition(xy(0,0)); wrap_slot:SetSize(xy(0,0)); wrap_slot:SetZOrder(item.z)
-            local live_slot=item.wrapper:AddChildToCanvas(source)
-            live_slot:SetLayout(item.layout); live_slot:SetZOrder(item.z)
-            item.wrapper:SetVisibility(4)
-            item.clone=assert(api:spawn_object(find('Class /Script/UMG.Image'),hud.WidgetTree))
-            item.slot=s.reticle:AddChildToCanvas(item.clone)
-            item.slot:SetAnchors(center)
-            item.slot:SetAlignment(xy(item.layout.Alignment.X,item.layout.Alignment.Y))
-            item.slot:SetZOrder(item.z)
-            log(string.format('Live crosshair copy %s; original size %.1f x %.1f',key,item.layout.Offsets.Right,item.layout.Offsets.Bottom))
+            local slot=item.parent:AddChildToCanvas(item.wrapper)
+            slot:SetAnchors(full);slot:SetAlignment(xy(0,0));slot:SetPosition(xy(0,0));slot:SetSize(xy(0,0));slot:SetZOrder(item.z)
+            local live_slot=item.wrapper:AddChildToCanvas(source);live_slot:SetLayout(item.layout);live_slot:SetZOrder(item.z)
+            item.wrapper:SetVisibility(2)
+            item.clone=assert(api:spawn_object(find('Class /Script/UMG.Image'),s.host.WidgetTree))
+            item.slot=s.reticle:AddChildToCanvas(item.clone);item.slot:SetAnchors(center)
+            item.slot:SetAlignment(xy(item.layout.Alignment.X,item.layout.Alignment.Y));item.slot:SetZOrder(item.z)
         end
     end
-    assert(#s.images>0,'No original crosshair widgets found')
-    sync_images(s)
-    s.camera=assert(pc.PlayerCameraManager,'Aim camera unavailable')
-    s.weapon_class=find('BlueprintGeneratedClass /Game/Items/BP_Item.BP_Item_C')
-    log('Original animated crosshair on independent compositor aim layer; 275 cm gun target; no render target.')
+    assert(#s.images>0,'No original reticle artwork found');sync_images(s)
+    s.component=assert(pawn:AddComponentByClass(find('Class /Script/UMG.WidgetComponent'),true,identity,false))
+    s.component:SetWidgetSpace(0);s.component:SetDrawSize(xy(256,256))
+    s.component:SetCollisionEnabled(0);s.component:SetRenderInMainPass(false);s.component:SetRenderInDepthPass(false);s.component:SetCastShadow(false)
+    for _,method in ipairs({'SetRenderCustomDepth','SetVisibleInRayTracing','SetReceivesDecals'}) do
+        if s.component:get_class():find_function(method) then s.component[method](s.component,false) end
+    end
+    if s.component:get_class():find_property('BackgroundColor') then s.component.BackgroundColor=native('CoreUObject.LinearColor',{R=0,G=0,B=0,A=0}) end
+    s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=true;s.component:SetWindowFocusable(false)
+    if s.component:get_class():find_property('bReceiveHardwareInput') then s.component.bReceiveHardwareInput=false end
+    s.component:SetWidget(s.host);s.component:RequestRedraw()
+    s.token=string.format('%.0f',s.component:get_address());bridge('Source',s.token)
+    fault=nil;log('Dedicated 256x256 gun reticle compositor layer; crosshair and hit X share private artwork host; no information-HUD projection.')
+end
+local function valid_state(s)
+    if not alive(s.hud) or not s.hud:IsInViewport() or s.hud.WidgetTree.RootWidget~=s.root or not alive(s.host) or not alive(s.component) or not alive(s.head) or not alive(s.hand) then return false end
+    for _,item in ipairs(s.images) do if not alive(item.source) or not alive(item.clone) or not alive(item.wrapper) or not item.source.Slot then return false end end
+    return true
 end
 local function update(s,pc,dt)
     s.animation_time=s.animation_time+dt
-    s.settings_time=s.settings_time+dt
-    if s.animation_time>=1/60 then s.animation_time=0; sync_images(s) end
-    s.weapon_scan=s.weapon_scan+dt
-    local cinema=vr:get_mod_value('VR_2DScreenMode')=='true'
-    local visible=vr.is_runtime_ready() and not cinema and not pc.bShowMouseCursor and not uevr.params.functions.is_drawing_ui()
-    s.hide_reason=not vr.is_runtime_ready() and 'runtime unavailable'
-        or cinema and 'cinema screen'
-        or pc.bShowMouseCursor and 'game menu'
-        or uevr.params.functions.is_drawing_ui() and 'VR menu' or 'none'
-    s.ready=false
-    if not visible then show_marker(s,false); s.adjusted=false; return end
-    if s.settings_time>=1 then
-        s.settings_time=0
-        s.distance=assert(tonumber(vr:get_mod_value('UI_Distance')))
-        s.height=assert(tonumber(vr:get_mod_value('UI_Size')))
-        s.xoffset=tonumber(vr:get_mod_value('UI_X_Offset')) or 0
-        s.yoffset=tonumber(vr:get_mod_value('UI_Y_Offset')) or 0
-        s.supported=vr:get_mod_value('UI_FollowView')=='true' and vr:get_mod_value('UI_OverlayType')=='0'
-        local viewport=s.layout:GetViewportSize(pc)
-        s.logical_height=viewport.Y/math.max(s.layout:GetViewportScale(pc),.01)
+    local visible=vr.is_runtime_ready() and vr.is_hmd_active() and vr:get_mod_value('VR_2DScreenMode')~='true' and not pc.bShowMouseCursor and not uevr.params.functions.is_drawing_ui()
+    show_marker(s,visible);bridge('Active',visible and 'true' or 'false')
+    s.aim_enabled=visible
+    if not visible then bridge('Target','') end
+    s.ready=vr:get_mod_value('VR_FarFarReticleReady')==s.token
+    if s.dirty or (visible and s.animation_time>=1/60) then
+        sync_images(s);s.component:RequestRedraw();s.animation_time=0;s.dirty=false;s.updates=s.updates+1
     end
-    if not s.supported then s.hide_reason='unsupported UI projection'; show_marker(s,false); s.adjusted=false; return end
-    if s.weapon and (not alive(s.weapon) or s.weapon.OwningPlayer~=s.pawn or not s.weapon.isDrawn) then s.weapon=nil end
-    if s.weapon_scan>=1 then
-        s.weapon_scan=0
-        if not s.weapon then
-            for _,weapon in ipairs(s.weapon_class:get_objects_matching(false)) do
-                local name=weapon:get_full_name()
-                if name:find('.PersistentLevel.',1,true) and not name:find('BP_Item_Empty_C',1,true)
-                    and weapon.OwningPlayer==s.pawn and weapon.isDrawn and weapon.canBeReloaded then s.weapon=weapon; break end
+end
+local function render_aim(s)
+    if not s.aim_enabled then return end
+    -- Firearms use the camera actor that F_TraceBullet reads, as in the
+    -- wearer-accepted implementation. Empty hands retain right-hand aim.
+    local items=s.pawn:get_class():find_property('AC_PlayerItems') and s.pawn.AC_PlayerItems
+    local item=items and items.equipedItem
+    local is_empty=false
+    if alive(item) then
+        local ok,name=pcall(safe_full_name,item)
+        if ok and type(name)=='string' and name:find('BP_Item_Empty',1,true) then
+            is_empty=true
+        else
+            local ok_cls,cls=pcall(safe_class,item)
+            if ok_cls and cls then
+                local ok_cn,cname=pcall(safe_full_name,cls)
+                if ok_cn and type(cname)=='string' and cname:find('BP_Item_Empty',1,true) then
+                    is_empty=true
+                end
             end
         end
     end
-    if not s.weapon then s.hide_reason='no drawn firearm'; show_marker(s,false); s.adjusted=false; return end
-    s.ready=true
-end
-local function render_aim(s)
-    if not s.ready then return end
-    -- F_TraceBullet uses these exact camera actor properties before adding spread.
-    -- Read them after UObjectHook has updated the HMD for this stereo view, not
-    -- against last frame's HMD at the end of the engine tick. No physics query.
-    local start=s.camera:K2_GetActorLocation()
-    local direction=s.camera:GetActorForwardVector()
-    local pos=marker_target({start=start,point={X=start.X+direction.X*10000,Y=start.Y+direction.Y*10000,Z=start.Z+direction.Z*10000}})
-    if not pos then s.hide_reason='empty aim trace'; show_marker(s,false); s.adjusted=false; return end
-    local x,y=project(s.head:K2_GetComponentLocation(),s.head:K2_GetComponentRotation(),pos,
-        s.distance,s.height,s.xoffset,s.yoffset,s.logical_height)
-    if not x then s.hide_reason='gun target behind headset'; show_marker(s,false); s.adjusted=false; return end
-    s.reticle_slot:SetPosition(xy(x,y))
-    s.screen_x,s.screen_y=x,y
-    show_marker(s,true)
-    -- Wrappers hide only viewport paint; source animation properties stay intact.
-    s.adjusted=true
-    s.trace_count=s.trace_count+1
+    local drawn=false
+    if alive(item) and not is_empty then
+        local has_drawn_prop=false
+        local ok_cls,cls=pcall(safe_class,item)
+        if ok_cls and cls and cls.find_property then
+            local ok_prop,prop=pcall(safe_find_is_drawn,cls)
+            if ok_prop and prop then has_drawn_prop=true end
+        end
+        if has_drawn_prop then
+            drawn=(item.isDrawn and item.isDrawn~=0) and true or false
+        else
+            drawn=true
+        end
+    end
+    local firearm=drawn
+    local start,direction
+    if firearm then
+        local camera=assert(s.pc.PlayerCameraManager,'Firing camera unavailable')
+        start=camera:K2_GetActorLocation();direction=camera:GetActorForwardVector()
+        s.aim_source='game firing camera'
+    else
+        start=s.hand:K2_GetComponentLocation();direction=s.hand:GetForwardVector()
+        s.aim_source='tracked right hand'
+    end
+    local hp,hr=s.head:K2_GetComponentLocation(),s.head:K2_GetComponentRotation()
+    local dx,dy,dz=start.X+direction.X*275-hp.X,start.Y+direction.Y*275-hp.Y,start.Z+direction.Z*275-hp.Z
+    local p,y,r=math.rad(hr.Pitch),math.rad(hr.Yaw),math.rad(hr.Roll)
+    local cp,sp,cy,sy,cr,sr=math.cos(p),math.sin(p),math.cos(y),math.sin(y),math.cos(r),math.sin(r)
+    local forward=dx*cp*cy+dy*cp*sy+dz*sp
+    local right=dx*(sr*sp*cy-cr*sy)+dy*(sr*sp*sy+cr*cy)-dz*sr*cp
+    local up=-dx*(cr*sp*cy+sr*sy)+dy*(cy*sr-cr*sp*sy)+dz*cr*cp
+    local units=100*math.max(.1,tonumber(vr:get_mod_value('VR_WorldScale')) or 1)
+    -- Transport a point in headset-local OpenXR axes, not HUD pixels. Native
+    -- composition reconstructs its stage pose without consulting HUD settings.
+    bridge('Target',string.format('%.8f %.8f %.8f',right/units,up/units,-forward/units))
+    s.aim_updates=(s.aim_updates or 0)+1
 end
 uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function()
-    if fault or not state then return end
-    local ok,err=pcall(function() render_aim(state) end)
+    if not state or retry_time>0 then return end
+    stage='per-view firing aim'
+    local ok,err=pcall(render_aim,state)
     if not ok then
-        fault=tostring(err); cleanup(); restore_title()
-        fs.write('farfarvr-hud-status.txt','ERROR in render aim: '..fault)
+        pcall(bridge,'Target','');recover_hud(err)
     end
 end)
+recover_hud=function(err)
+    fault=stage..': '..tostring(err);pcall(cleanup);pcall(restore_title);last_pawn=nil;scan_time=0;retry_time=1
+    uevr.params.functions.log_error('[Far Far VR HUD] Rebuilding private gun layer after '..fault)
+    fs.write('farfarvr-hud-status.txt','ERROR in independent gun layer: '..fault)
+end
 local function title_height(pawn)
     if pawn and pawn:get_full_name():find('BP_TitleScreen_C ',1,true) then
         if title_camera~=pawn.CineCamera then
@@ -212,44 +249,30 @@ local function title_height(pawn)
         restore_title()
     end
 end
-uevr.sdk.callbacks.on_post_engine_tick(function(engine,dt)
-    if fault then return end
+uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
+    retry_time=math.max(0,retry_time-dt);if retry_time>0 then return end
     local ok,err=pcall(function()
-        local pc=api:get_player_controller(0)
-        if not pc then return end
-        local pawn=pc.Pawn
-        title_height(pawn)
-        if pawn~=last_pawn then cleanup(); last_pawn=pawn; scan_time=0 end
-        if state and (not alive(state.hud) or not state.hud:IsInViewport()) then cleanup(); scan_time=0 end
+        stage='player/context';local pc=api:get_player_controller(0);if not pc then return end
+        local pawn=pc.Pawn;title_height(pawn)
+        if pawn~=last_pawn then cleanup();last_pawn=pawn;scan_time=0 end
+        if state and not valid_state(state) then cleanup();scan_time=0 end
         if not pawn or not pawn:get_full_name():find('BP_Player',1,true) then return end
+        local backend=vr:get_mod_value('VR_FarFarReticleReady')
+        if not backend or backend=='' then return end
         if not state then
-            scan_time=scan_time+dt
-            if scan_time<1 then return end
-            scan_time=0
+            scan_time=scan_time+dt;if scan_time<1 then return end;scan_time=0
             local cls=api:find_uobject('WidgetBlueprintGeneratedClass /Game/Interfaces/UI_Player.UI_Player_C')
-            if not cls then return end
-            for _,hud in ipairs(cls:get_objects_matching(false)) do
-                if hud:get_full_name():find('/Engine/Transient.',1,true) and hud:IsInViewport() and hud:GetOwningPlayer()==pc then
-                    build(pawn,pc,hud); break
-                end
-            end
+            if cls then for _,hud in ipairs(cls:get_objects_matching(false)) do
+                if hud:IsInViewport() and hud:GetOwningPlayer()==pc then stage='private gun layer build';build(pawn,pc,hud);break end
+            end end
         end
-        if state then update(state,pc,dt) end
+        stage='private gun artwork';if state then update(state,pc,dt) end
         status_time=status_time+dt
-        if status_time>5 then
-            status_time=0
-            local message='Waiting for gameplay HUD'
-            if state then message=string.format('Original animated crosshair v7; synchronized stereo-view aim; 275 cm gun target\nweapon %s\naim_view_updates %d (no physics queries)\nmarker_visible %s\nhide_reason %s\nsource_visibility %s opacity %.3f\nscreen_offset %.1f %.1f; no crosshair render target',
-                state.weapon and state.weapon:get_full_name() or 'none equipped',state.trace_count,tostring(state.adjusted or false),state.hide_reason or 'none',
-                tostring(state.images[1].source:GetVisibility()),state.images[1].source.RenderOpacity,
-                state.screen_x or 0,state.screen_y or 0) end
-            fs.write('farfarvr-hud-status.txt',message)
+        if status_time>=3 then
+            status_time=0;local s=state
+            fs.write('farfarvr-hud-status.txt',s and ('Independent gun compositor layer v13\nCrosshair, hit X and shield hit share one private 256x256 widget\nAttached to information HUD: false\nAim source '..tostring(s.aim_source)..'\nPer-view aim updates '..tostring(s.aim_updates or 0)..'\nNative ready '..tostring(s.ready)..'\nVisible '..tostring(s.showing)..'\nArtwork updates '..s.updates) or 'Waiting for gameplay HUD sources')
         end
     end)
-    if not ok then
-        fault=tostring(err); cleanup(); restore_title()
-        uevr.params.functions.log_error('[Far Far VR HUD] Restored original HUD: '..fault)
-        fs.write('farfarvr-hud-status.txt','ERROR: '..fault)
-    end
+    if not ok then recover_hud(err) end
 end)
-uevr.sdk.callbacks.on_script_reset(function() cleanup(); restore_title() end)
+uevr.sdk.callbacks.on_script_reset(function() cleanup();restore_title() end)

@@ -1,0 +1,12 @@
+param([string]$OutputFolder=(Join-Path $PSScriptRoot '..\diagnostics\gun-reticle-repair-20261030\native-reticle'))
+$ErrorActionPreference='Stop'
+New-Item -ItemType Directory -Path $OutputFolder -Force | Out-Null
+& 'C:\BuildTools\VS2022\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+$taskTest=Join-Path $PSScriptRoot '..\tests\farfar_reticle.cpp'
+$taskExe=Join-Path $OutputFolder 'reticle.exe'
+$taskObj=Join-Path $OutputFolder 'reticle.obj'
+$glm=if(Test-Path(Join-Path $PSScriptRoot "..\vendor\UEVR\dependencies\submodules\glm")){Join-Path $PSScriptRoot "..\vendor\UEVR\dependencies\submodules\glm"}else{Join-Path $PSScriptRoot "..\..\UEVR\vendor\UEVR\dependencies\submodules\glm"}
+& cl.exe /nologo /EHsc /std:c++20 /W4 ("/I" + $glm) $taskTest "/Fe:$taskExe" "/Fo:$taskObj"
+if($LASTEXITCODE -ne 0){throw 'Gun reticle test build failed'}
+& $taskExe
+if($LASTEXITCODE -ne 0){throw 'Gun reticle tests failed'}

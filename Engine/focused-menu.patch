@@ -1,5 +1,5 @@
 diff --git a/src/Framework.cpp b/src/Framework.cpp
-index b5c73925..be66426d 100644
+index b5c73925..0b43b6de 100644
 --- a/src/Framework.cpp
 +++ b/src/Framework.cpp
 @@ -23,6 +23,7 @@
@@ -19,19 +19,19 @@ index b5c73925..be66426d 100644
 +        wchar_t executable[32768]{};
 +        if (GetModuleFileNameW(nullptr, executable, 32768) == 0) return false;
 +        return _wcsicmp(std::filesystem::path(executable).filename().c_str(), L"FarFarWest-Win64-Shipping.exe") == 0
-+            && std::filesystem::exists(get_persistent_dir() / "farfarvr-menu.enabled");
++            && !std::filesystem::exists(get_persistent_dir() / "farfarvr-original-menu.enabled");
 +    }();
 +
      // Center the window
      const auto rt_size = get_rt_size();
 -    constexpr auto window_w = 700.0f;
 -    constexpr auto window_h = 700.0f;
-+    const auto window_w = farfarvr_menu ? 840.0f : 700.0f;
-+    const auto window_h = farfarvr_menu ? 760.0f : 700.0f;
++    const auto window_w = farfarvr_menu ? std::min(940.0f, std::max(480.0f, float(rt_size.x)-32.0f)) : 700.0f;
++    const auto window_h = farfarvr_menu ? std::min(800.0f, std::max(480.0f, float(rt_size.y)-32.0f)) : 700.0f;
  
      const auto centered_x = (rt_size.x / 2) - (window_w / 2);
      const auto centered_y = (rt_size.y / 2) - (window_h / 2);
-@@ -1380,8 +1389,62 @@ void Framework::draw_ui() {
+@@ -1380,8 +1389,64 @@ void Framework::draw_ui() {
      
      static const auto UEVR_NAME = std::format("UEVR [{}+{}-{:.8}]", UEVR_TAG, UEVR_COMMITS_PAST_TAG, UEVR_COMMIT_HASH);
  
@@ -65,38 +65,40 @@ index b5c73925..be66426d 100644
 +        ImGui::SetNextWindowSize(ImVec2(window_w, window_h), ImGuiCond_Once);
 +    }
 +
-+    ImGui::Begin(farfarvr_menu ? "Far Far VR" : UEVR_NAME.c_str(), &m_draw_ui);
++    ImGui::Begin(farfarvr_menu ? "Far Far VR" : UEVR_NAME.c_str(), &m_draw_ui, farfarvr_menu ? ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize : 0);
 +    if (farfarvr_menu) ImGui::SetWindowFontScale(1.08f);
 +
 +    if (farfarvr_menu) {
 +        const auto vr = VR::get();
 +        const auto runtime = vr->get_runtime();
-+        if (runtime == nullptr || !runtime->loaded) {
-+            ImGui::TextColored(ImVec4(.93f,.73f,.46f,1), "HEADSET DISCONNECTED");
-+            ImGui::TextWrapped("Connect your headset to PCVR to calibrate and play.");
-+            const auto openxr = vr->get_openxr_runtime();
-+            if (openxr != nullptr && openxr->error) {
-+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", openxr->error->c_str());
-+            }
++        ImGui::TextColored(ImVec4(.93f,.73f,.46f,1), "FAR FAR VR  /  YOUR NEXT FRONTIER");
++        ImGui::TextWrapped("Hold Start for 0.5 seconds to show or hide this menu. A quick press opens the game menu.");
++        ImGui::Separator();
++        if(runtime == nullptr || !runtime->ready() || !vr->is_hmd_active()) {
++            ImGui::TextWrapped("Waiting for your headset. Connect to PCVR and put it on to continue.");
 +            if (ImGui::Button("Retry headset connection")) vr->clean_initialize();
 +        } else {
-+            ImGui::TextColored(ImVec4(.50f,.82f,.67f,1), "HEADSET CONNECTED");
++            ImGui::TextColored(ImVec4(.50f,.82f,.67f,1), "VR READY");
 +        }
-+        ImGui::Separator();
-+        if (!m_error.empty()) {
-+            ImGui::TextWrapped("VR startup error: %s", m_error.c_str());
-+        } else if (!m_game_data_initialized || !m_mods_fully_initialized) {
-+            ImGui::TextWrapped("Far Far VR is initializing. Please wait...");
-+        } else if (!LuaLoader::get()->draw_farfarvr_panel()) {
-+            ImGui::TextWrapped("Far Far VR menu module is missing. Close the game and reinstall the menu module.");
++        // Keep Return to game visible even when settings need to scroll.
++        if(ImGui::BeginChild("FarFarVRContent",ImVec2(0,-58.0f),false)) {
++            if (!m_error.empty()) {
++                ImGui::TextWrapped("VR startup error: %s", m_error.c_str());
++            } else if (!m_game_data_initialized || !m_mods_fully_initialized) {
++                ImGui::TextWrapped("Changing to VR mode. Please wait...");
++            } else if (!LuaLoader::get()->draw_farfarvr_panel()) {
++                ImGui::TextWrapped("The Far Far VR settings could not load. Close the game and reopen the launcher to reinstall them.");
++            }
 +        }
++        ImGui::EndChild();
 +        ImGui::Separator();
-+        if (ImGui::Button("Return to game")) m_draw_ui = false;
++        if (ImGui::Button("Return to game",ImVec2(210,36))) m_draw_ui = false;
++        ImGui::SameLine();ImGui::TextDisabled("Show again: hold Start or press Insert");
 +    } else {
  
      ImGui::BeginGroup();
      ImGui::Columns(2);
-@@ -1599,10 +1662,13 @@ void Framework::draw_ui() {
+@@ -1599,10 +1664,13 @@ void Framework::draw_ui() {
          ImGui::EndTable();
      }
  
@@ -111,13 +113,19 @@ index b5c73925..be66426d 100644
      // save the menu state in config
      if (m_draw_ui != m_last_draw_ui) {
 diff --git a/src/mods/LuaLoader.cpp b/src/mods/LuaLoader.cpp
-index 7da9003b..d201d718 100644
+index 7da9003b..bac1b1e5 100644
 --- a/src/mods/LuaLoader.cpp
 +++ b/src/mods/LuaLoader.cpp
-@@ -252,6 +252,31 @@ void LuaLoader::on_draw_sidebar_entry(std::string_view in_entry) {
+@@ -252,6 +252,37 @@ void LuaLoader::on_draw_sidebar_entry(std::string_view in_entry) {
      }
  }
  
++bool LuaLoader::has_farfarvr_panel() {
++    std::scoped_lock lock{m_access_mutex};
++    if(m_needs_first_reset)return false;
++    return std::any_of(m_script_panels.begin(),m_script_panels.end(),[](const auto& p){return p.name=="Far Far VR"&&!p.state.expired();});
++}
++
 +bool LuaLoader::draw_farfarvr_panel() {
 +    std::scoped_lock _{m_access_mutex};
 +    if (m_needs_first_reset) {
@@ -146,7 +154,7 @@ index 7da9003b..d201d718 100644
  void LuaLoader::reset_scripts() {
      spdlog::info("[LuaLoader] Resetting scripts...");
  
-@@ -357,4 +382,4 @@ void LuaLoader::dispatch_event(std::string_view event_name, std::string_view eve
+@@ -357,4 +388,4 @@ void LuaLoader::dispatch_event(std::string_view event_name, std::string_view eve
      }
  
      m_main_state->dispatch_event(event_name, event_data);
@@ -154,14 +162,15 @@ index 7da9003b..d201d718 100644
 \ No newline at end of file
 +}
 diff --git a/src/mods/LuaLoader.hpp b/src/mods/LuaLoader.hpp
-index 548d33d5..b54fc9c1 100644
+index 548d33d5..2630273d 100644
 --- a/src/mods/LuaLoader.hpp
 +++ b/src/mods/LuaLoader.hpp
-@@ -43,6 +43,7 @@ public:
+@@ -43,6 +43,8 @@ public:
      }
  
      void on_draw_sidebar_entry(std::string_view in_entry);
 +    bool draw_farfarvr_panel();
++    bool has_farfarvr_panel();
      void on_frame() override;
  
      void on_config_load(const utility::Config& cfg, bool set_defaults) override;

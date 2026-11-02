@@ -3,9 +3,14 @@
 local api,vr=uevr.api,uevr.params.vr
 local state,last_pawn,fault
 local scan_time,status_time=0,0
+local obj_cache = {}
 local function find(path)
-    local obj=api:find_uobject(path)
-    assert(obj,'Missing '..path)
+    local obj = obj_cache[path]
+    if not obj then
+        obj = api:find_uobject(path)
+        assert(obj, 'Missing '..path)
+        obj_cache[path] = obj
+    end
     return obj
 end
 local function native(path,values)

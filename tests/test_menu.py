@@ -11,7 +11,7 @@ from lupa.lua54 import LuaRuntime
 HARNESS = r'''
 values = {VR_SnapTurn="false", VR_SnapturnTurnAngle="45", VR_WorldScale="1", UI_Distance="2"}
 writes, logs, texts, saves, recentered = {}, {}, {}, 0, 0
-events, open, ignore_writes = {}, false, false
+events, open, ignore_writes, files = {}, false, false, {}
 local vr = {}
 function vr:get_mod_value(key) return values[key] or "" end
 function vr.set_mod_value(key, value)
@@ -33,8 +33,15 @@ uevr = {params={vr=vr, functions={is_drawing_ui=function() return open end, log_
     sdk={callbacks={on_frame=function(fn) frame = fn end}},
     lua={add_script_panel=function(name, fn) panel_name=name; draw=fn end}}
 imgui = {}
-fs = {write=function(name, value) diagnostic_name=name; diagnostic_value=value end}
+fs = {
+    write=function(name, value) files[name]=value; diagnostic_name=name; diagnostic_value=value end,
+    read=function(name) return files[name] end
+}
 function imgui.text(s) table.insert(texts, s) end
+imgui.text_wrapped = imgui.text
+child_windows = 0
+imgui.begin_child = function(name, size, border) child_windows=child_windows+1; return true end
+imgui.end_child = function() end
 function imgui.separator() end
 function imgui.same_line() end
 function imgui.button(label) local result=events[label]; events[label]=nil; return result == true end
@@ -48,6 +55,8 @@ function imgui.spacing() end
 function imgui.set_next_item_width() end
 function imgui.push_style_color() end
 function imgui.pop_style_color() end
+function imgui.is_item_hovered() return false end
+function imgui.set_tooltip() end
 print = function(s) table.insert(logs, s) end
 '''
 
@@ -67,6 +76,38 @@ class MenuTests(unittest.TestCase):
     def test_open_is_read_only(self):
         self.check('assert(panel_name == "Far Far VR"); open=true; frame(); draw(); assert(#writes==0 and saves==0 and recentered==0)')
 
+    def test_welcome_shows_hold_help_without_setting_writes(self):
+        self.check("open=true; frame(); draw(); assert(#writes==0); assert(table.concat(texts,' '):find('Hold Start for 0.5 seconds',1,true))")
+
+    def test_display_edits_are_explicit_and_do_not_touch_game_quality(self):
+        self.check("events.Display=true; draw(); assert(#writes==0); events['Desktop mirror']=1; draw(); assert(tonumber(values.VR_DesktopSpectatorViewMode)==1 and #writes==1 and saves==0)")
+
+    def test_sync_mode_and_uncap_framerate_display_options(self):
+        self.check('''events.Display=true; draw(); assert(#writes==0)
+            events["Frame synchronization"]=0; draw()
+            assert(tonumber(values.VR_SynchronizationMode)==0 and #writes==1 and saves==0)
+            events["Uncap engine framerate"]=true; draw()
+            assert(values.VR_UncapFramerate=="true" and #writes==2 and saves==0)
+            events["Revert this session's edits"]=true; draw()
+            assert(tonumber(values.VR_SynchronizationMode)==1 and values.VR_UncapFramerate=="false")''')
+
+    def test_resolution_scale_slider_adjusts_and_saves(self):
+        self.check('''events.Display=true; draw(); assert(#writes==0)
+            events["Resolution scale"]=0.75; draw()
+            assert(tonumber(values.OpenXR_ResolutionScale)==0.75 and #writes==1 and saves==0)
+            events["Save settings"]=true; draw(); assert(saves==1)
+            events["Resolution scale"]=0.9; draw()
+            events["Revert this session's edits"]=true; draw()
+            assert(tonumber(values.OpenXR_ResolutionScale)==0.75)''')
+
+    def test_unregistered_runtime_resolution_scale_fallback_and_adjust(self):
+        self.check('''values.OpenXR_ResolutionScale=nil
+            events.Display=true; draw()
+            events["Resolution scale"]=0.75; draw()
+            events["Save settings"]=true; draw(); assert(saves==1)
+            events["Resolution scale"]=0.9; draw()
+            events["Revert this session's edits"]=true; draw()''')
+
     def test_live_edit_and_revert_preserve_other_options(self):
         self.check('''events["Calibration"]=true; draw(); values.Unrelated="kept"; open=true; frame()
             events["World scale"]=1.25; draw()
@@ -75,7 +116,7 @@ class MenuTests(unittest.TestCase):
             assert(tonumber(values.VR_WorldScale)==1 and values.Unrelated=="kept")''')
 
     def test_save_sets_new_revert_point(self):
-        self.check('''open=true; frame(); events["Snap turning"]=true; draw()
+        self.check('''events.Comfort=true; draw(); open=true; frame(); events["Snap turning"]=true; draw()
             events["Save settings"]=true; draw(); assert(saves==1)
             events["Snap turning"]=false; draw()
             events["Revert this session's edits"]=true; draw(); assert(values.VR_SnapTurn=="true")''')
@@ -119,6 +160,62 @@ class MenuTests(unittest.TestCase):
             events.Calibration=true; draw(); events["Reset height & camera"]=true; draw()
             assert(tonumber(values.VR_CameraUpOffset)==0 and values.ButtonMapping=="fixed" and values.VR_AimMethod=="2")
             events["Revert this session's edits"]=true; draw(); assert(tonumber(values.VR_CameraUpOffset)==4.447802)''')
+
+    def test_controls_popup_and_controls_page(self):
+        self.check('''
+            ready = true
+            open = true
+            windows = {}
+            imgui.begin_window = function(name, open_flag, flags)
+                table.insert(windows, name)
+                return true, true
+            end
+            imgui.end_window = function() end
+            imgui.set_next_window_size = function() end
+            drawn_images = 0
+            imgui.draw_controls_image = function(w, h)
+                drawn_images = drawn_images + 1
+            end
+
+            -- First draw when VR is ready should trigger the controls popup
+            draw()
+            assert(#windows >= 1 and windows[#windows] == "Far Far VR - Controls & Bindings")
+            assert(drawn_images >= 1)
+
+            -- Closing the popup via the button
+            events["Close Controls Diagram"] = true
+            draw()
+            windows = {}
+            draw()
+            assert(#windows == 0)
+
+            -- Navigating to Controls tab allows viewing diagram and reopening popup
+            events["Controls"] = true
+            drawn_images = 0
+            draw()
+            assert(drawn_images >= 1)
+
+            events["Show Controls Popup"] = true
+            draw()
+            assert(#windows >= 1 and windows[#windows] == "Far Far VR - Controls & Bindings")
+        ''')
+
+    def test_updates_tab_queues_nonblocking_launcher_commands_and_shows_release_notes(self):
+        self.check('''
+            events.Updates=true; draw()
+            assert(table.concat(texts,' '):find('Current Version: v0.4.0',1,true))
+            events['Check for Updates']=true; draw()
+            assert(files['farfarvr-update-command.txt']=='check')
+            draw()
+            assert(table.concat(texts,' '):find('Checking for updates...',1,true))
+            files['farfarvr-updates.txt']='state=available\\nversion=v0.4.1\\nnotes:\\nBug fixes\\nComfort improvements'
+            draw()
+            assert(table.concat(texts,' '):find('Update Available: v0.4.1',1,true))
+            assert(child_windows > 0)
+            assert(table.concat(texts,' '):find('Comfort improvements',1,true))
+            events['Download & Prepare Update']=true; draw()
+            assert(files['farfarvr-update-command.txt']=='stage')
+        ''')
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

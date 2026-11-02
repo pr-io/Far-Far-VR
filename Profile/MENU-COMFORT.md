@@ -40,8 +40,8 @@ The headset was unavailable (XR_ERROR_FORM_FACTOR_UNAVAILABLE), so notice,
 main menu, pause menu, start/results screens, readability, controller pointing
 and actual mounted travel need headset acceptance. No session was started.
 
-Pre-change configuration is retained only in the local recovery copy and is not
-included in the repository or release.
+Backups: `H:/UEVR/diagnostics/menu-comfort-20261025-145732/` contains the prior
+UEVR config, Touch bindings, game user settings and game input settings.
 To revert UI only, with the game closed, set UI_Distance=2.000000 and
 UI_FollowView=false in the active config. To revert mount steering only, set
 Control Mount with Camera to Yes in the game's Controls menu.

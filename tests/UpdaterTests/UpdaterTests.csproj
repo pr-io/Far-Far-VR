@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\Launcher\ControllerBindings.cs" Link="ControllerBindings.cs" />
+    <Compile Include="../../Launcher/Updater.cs" Link="Updater.cs" />
+    <Compile Include="../../Launcher/Setup.cs" Link="Setup.cs" />
   </ItemGroup>
 </Project>

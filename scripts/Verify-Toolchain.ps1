@@ -1,6 +1,5 @@
-param([string]$BuildToolsFolder = '')
+param([string]$BuildToolsFolder = 'C:\BuildTools\VS2022')
 $ErrorActionPreference = 'Stop'
-$BuildToolsFolder = & (Join-Path $PSScriptRoot 'Find-VS2022.ps1') -Path $BuildToolsFolder
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 & (Join-Path $BuildToolsFolder 'Common7\Tools\Launch-VsDevShell.ps1') -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
 $cmake = Join-Path $BuildToolsFolder 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'

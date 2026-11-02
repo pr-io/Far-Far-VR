@@ -11,15 +11,16 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        if (args.Length == 1 && args[0] == "--verify-package")
-        {
-            try { PackageVerifier.Validate(AppContext.BaseDirectory); }
-            catch (Exception ex) { Console.Error.WriteLine(ex.Message); Environment.ExitCode = 1; }
-            return;
-        }
         LauncherLog.Write($"Launcher opened. executable={Environment.ProcessPath}; corrected runtime={Setup.CurrentBackendHash}; arguments={string.Join(' ', args)}");
         using var instance = new Mutex(true, @"Local\FarFarWestVR.Launcher", out bool first);
         if (!first) { LauncherLog.Write("Another launcher instance is open; no second launch was started."); return; }
+        try { if (UpdateService.StartPendingApply(args)) return; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            LauncherLog.Write("Pending update could not be started: " + ex);
+            MessageBox.Show(ex.Message, "Far Far VR update", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
         ApplicationConfiguration.Initialize();
         string? runtimeOverride = null;
         int runtimeIndex = Array.IndexOf(args, "--runtime");
@@ -33,7 +34,7 @@ internal static class Program
             runtimeOverride = Path.GetFullPath(args[runtimeIndex + 1]);
         }
         Setup.UsePreviewPreferences = runtimeOverride != null;
-        Application.Run(new LauncherForm(args.Contains("--start"), runtimeOverride));
+        Application.Run(new LauncherForm(runtimeOverride));
     }
 }
 
@@ -44,15 +45,20 @@ internal sealed class LauncherForm : Form
     private readonly ProgressBar progress = new();
     private CancellationTokenSource? cancellation;
     private bool closing;
-    private readonly bool autoStart;
+    private int? sessionProcess;
+    private SessionSnapshot? session;
+    private bool handedOff;
+    private readonly SessionLink sessionLink = new(Setup.ProfileFolder);
+    private readonly System.Windows.Forms.Timer sessionTimer = new() { Interval=500 };
+    private readonly UpdateService updateService = new(Setup.ProfileFolder);
+    private Task? updateTask;
     private readonly Setup setup = Setup.Load();
     private readonly Button options = new();
     private static readonly Color Gold = Color.FromArgb(244, 173, 62);
 
-    public LauncherForm(bool autoStart, string? runtimeOverride = null)
+    public LauncherForm(string? runtimeOverride = null)
     {
         if (runtimeOverride != null) setup.RuntimeFolder = runtimeOverride;
-        this.autoStart = autoStart;
         Text = runtimeOverride == null ? "Far Far VR" : "Far Far VR — Menu Preview";
         ClientSize = new Size(760, 540);
         Theme.Form(this);
@@ -70,31 +76,23 @@ internal sealed class LauncherForm : Form
         card.Controls.Add(status);Controls.Add(card);
         progress.Bounds=new Rectangle(32,388,696,4);progress.Style=ProgressBarStyle.Marquee;progress.Visible=false;
         start.Text="START IN VR";start.Bounds=new Rectangle(32,415,360,54);Theme.Button(start,true);
-        start.Click+=async (_,_)=>{if(cancellation!=null)cancellation.Cancel();else await LaunchAsync();};
+        start.Click+=async (_,_)=>{
+            if(sessionProcess!=null){SetMenuVisible(session==null||!session.MenuVisible);return;}
+            if(cancellation!=null)cancellation.Cancel();else await LaunchAsync();
+        };
         options.Text="Settings";options.Bounds=new Rectangle(408,415,160,54);Theme.Button(options);
-        options.Click+=(_,_)=>ShowSetup();
+        options.Click+=(_,_)=>{
+            if(sessionProcess!=null){SetMenuVisible(true);return;}
+            using var dialog=new SetupForm(setup);
+            if(dialog.ShowDialog(this)==DialogResult.OK)status.Text="Settings saved. Ready for your next session.";
+        };
         var log=new LinkLabel {Text="View log",Bounds=new Rectangle(601,432,120,30),LinkColor=Theme.Muted,ActiveLinkColor=Theme.Accent};
         log.LinkClicked+=(_,_)=>{LauncherLog.Write("Log opened.");Process.Start(new ProcessStartInfo("notepad.exe"){ArgumentList={LauncherLog.Path},UseShellExecute=false});};
-        Controls.Add(Theme.Label("IN-GAME SETTINGS   Both thumbsticks or Insert",34,492,690,24,9,false,true));
+        Controls.Add(Theme.Label("VR SETTINGS   Hold Start for 0.5 seconds or press Insert",34,492,690,24,9,false,true));
         Controls.AddRange([start,options,progress,log]);
-        FormClosing += (_, _) => { closing = true; cancellation?.Cancel(); };
-        Shown += async (_, _) =>
-        {
-            if (this.autoStart) { await LaunchAsync(); return; }
-            try { setup.Validate(); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-            {
-                status.Text = ex.Message;
-                ShowSetup();
-            }
-        };
-    }
-
-    private void ShowSetup()
-    {
-        using var dialog = new SetupForm(setup);
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-            status.Text = "Settings saved. Start your PCVR app and connect the headset before playing.";
+        sessionTimer.Tick+=(_,_)=>{PollSession();PollUpdateCommand();};sessionTimer.Start();
+        FormClosing += (_, _) => { closing = true; cancellation?.Cancel(); sessionTimer.Stop(); };
+        FormClosed += (_,_)=>sessionTimer.Dispose();
     }
 
     private async Task LaunchAsync()
@@ -104,18 +102,17 @@ internal sealed class LauncherForm : Form
         start.Text = "CANCEL";
         progress.Visible = true;
         options.Enabled = false;
+        TopMost = true;
         var updates = new Progress<string>(message => { if (!closing) status.Text = message; LauncherLog.Write(message); });
         try
         {
-            await Task.Run(() => GameLaunch.RunAsync(setup, updates, token), token);
+            int processId=await Task.Run(() => GameLaunch.RunAsync(setup, updates, token), token);
             if (closing) return;
-            status.Text = "VR engine loaded. Continue in your headset.";
-            LauncherLog.Write("VR backend and engine hook confirmed. Headset gameplay is not assumed from this check.");
-            start.Text = "VR LOADED";
-            start.Enabled = false;
-            progress.Visible = false;
-            await Task.Delay(2500, token);
-            if (!closing && setup.CloseAfterLaunch) Close();
+            sessionProcess=processId;handedOff=false;session=null;
+            status.Text="Changing to VR mode… Put on your headset. Far Far VR will appear in front of you.";
+            LauncherLog.Write("VR hooks confirmed. Waiting for the live Far Far VR menu handoff.");
+            start.Text="WAITING FOR HEADSET";start.Enabled=false;
+            PollSession();
         }
         catch (OperationCanceledException)
         {
@@ -133,9 +130,98 @@ internal sealed class LauncherForm : Form
         {
             cancellation.Dispose();
             cancellation = null;
-            if (!closing) { start.Enabled = true; options.Enabled = true; start.Text = "START IN VR"; progress.Visible = false; }
+            if (!closing && sessionProcess==null) { TopMost=false;start.Enabled=true;options.Enabled=true;start.Text="START IN VR";progress.Visible=false; }
+            else if(!closing) PollSession();
         }
     }
+    private void SetMenuVisible(bool visible)
+    {
+        try
+        {
+            if(session==null)throw new IOException("Waiting for your headset. Hold Start once VR is ready.");
+            sessionLink.SetVisible(session,visible);
+            status.Text=visible?"Opening Far Far VR in your headset…":"Returning to your game… Hold Start to show Far Far VR again.";
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException){status.Text=ex.Message;}
+    }
+    private void PollSession()
+    {
+        if(closing||sessionProcess is not int processId)return;
+        try
+        {
+            using var game=Process.GetProcessById(processId);
+            if(game.HasExited||game.ProcessName!="FarFarWest-Win64-Shipping"){EndSession();return;}
+        }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException){EndSession();return;}
+        catch(Win32Exception){session=null;start.Enabled=false;options.Enabled=false;status.Text="Game status is unavailable. The headset menu is still available with Start.";return;}
+        session=sessionLink.Read(processId,DateTimeOffset.UtcNow);
+        if(session is not {RuntimeReady:true,MenuReady:true})
+        {
+            start.Enabled=false;options.Enabled=false;progress.Visible=!handedOff;
+            status.Text=handedOff?"Waiting for your headset to reconnect. Your game stays open.":"Changing to VR mode… Connect to PCVR and put on your headset.";
+            return;
+        }
+        if(!handedOff)
+        {
+            handedOff=true;TopMost=false;
+            if(!session.MenuVisible)SetMenuVisible(true);
+            LauncherLog.Write("Live Far Far VR menu is ready. Launcher remains open; headset menu owns VR input.");
+        }
+        status.Text="Far Far VR is ready. Hold Start for 0.5 seconds to show or hide the menu in your headset.";
+        start.Enabled=true;start.Text=session.MenuVisible?"RETURN TO GAME":"SHOW VR MENU";
+        options.Enabled=true;options.Text="VR Settings";progress.Visible=false;
+    }
+    private void PollUpdateCommand()
+    {
+        if (updateTask is { IsCompleted: false }) return;
+        string commandPath = Path.Combine(Setup.ProfileFolder, "farfarvr-update-command.txt");
+        string command;
+        try
+        {
+            if (!File.Exists(commandPath)) return;
+            command = File.ReadAllText(commandPath).Trim();
+            if (command is not ("check" or "stage")) return;
+            File.Delete(commandPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LauncherLog.Write("Update command could not be read: " + ex.Message);
+            return;
+        }
+
+        updateTask = Task.Run(async () =>
+        {
+            try
+            {
+                if (command == "check")
+                {
+                    updateService.WriteStatus("checking", "v" + UpdateService.CurrentVersion, "");
+                    ReleaseUpdate? release = await updateService.CheckAsync();
+                    updateService.WriteStatus(release is null ? "up-to-date" : "available",
+                        release?.Version ?? "v" + UpdateService.CurrentVersion,
+                        release?.Notes ?? "You are running the latest published Far Far VR release.");
+                }
+                else
+                {
+                    updateService.WriteStatus("downloading", "v" + UpdateService.CurrentVersion, "Downloading the update package...");
+                    await updateService.StageLatestAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Write("Update request failed: " + ex);
+                try { updateService.WriteStatus("error", "v" + UpdateService.CurrentVersion, ex.Message); }
+                catch (Exception statusError) { LauncherLog.Write("Update status could not be saved: " + statusError.Message); }
+            }
+        });
+    }
+    private void EndSession()
+    {
+        sessionProcess=null;session=null;handedOff=false;TopMost=false;
+        status.Text="Your game has closed. Ready for your next session.";
+        start.Enabled=true;start.Text="START IN VR";options.Enabled=true;options.Text="Settings";progress.Visible=false;
+    }
+
 }
 
 internal static class LauncherLog
@@ -158,10 +244,13 @@ internal static class GameLaunch
     private static readonly string GameLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWest", "Saved", "Logs", "FarFarWest.log");
     private static readonly string VrLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UnrealVRMod", "FarFarWest-Win64-Shipping", "log.txt");
 
-    public static async Task RunAsync(Setup setup, IProgress<string> status, CancellationToken token)
+    public static async Task<int> RunAsync(Setup setup, IProgress<string> status, CancellationToken token)
     {
         setup.Validate();
         Setup.EnsureProfile();
+        string inputSave=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "FarFarWest", "Saved", "SaveGames", "EnhancedInputUserSettings.sav");
+        if (SocialBindings.Repair(inputSave)) LauncherLog.Write("Validated social gamepad bindings and added push-to-talk; backup saved.");
         string GamePath = setup.GamePath;
         string BackendPath = setup.BackendPath;
         using var identity = WindowsIdentity.GetCurrent();
@@ -193,10 +282,10 @@ internal static class GameLaunch
                 if (!SamePath(loaded, BackendPath))
                     throw new InvalidOperationException("Another VR build is already loaded. Close the game, then use this launcher.");
                 status.Report("VR is already loaded in the running game.");
-                return;
+                return game.Id;
             }
 
-            status.Report("Waiting for the game to reach its title screen…");
+            status.Report("Waiting for the game to launch… Loading the title screen.");
             DateTime deadline = DateTime.UtcNow.AddMinutes(3);
             while (DateTime.UtcNow < deadline)
             {
@@ -216,13 +305,13 @@ internal static class GameLaunch
             if (loaded != null)
             {
                 if (!SamePath(loaded, BackendPath)) throw new InvalidOperationException("Another VR build was loaded while waiting. Close the game and try again.");
-                return;
+                return game.Id;
             }
-            status.Report("Loading VR…");
+            status.Report("Changing to VR mode…");
             DateTime injected = DateTime.UtcNow;
             NativeLoader.Load(game, BackendPath);
             LauncherLog.Write("Backend module confirmed in the game.");
-            status.Report("Finishing VR startup…");
+            status.Report("Changing to VR mode… Finishing startup.");
             deadline = DateTime.UtcNow.AddSeconds(90);
             while (DateTime.UtcNow < deadline)
             {
@@ -233,7 +322,7 @@ internal static class GameLaunch
                     throw new InvalidOperationException("The game reported an error during VR startup. Details are in the VR log.");
                 if (log.Contains("Hooked UGameEngine::Tick!", StringComparison.Ordinal) &&
                     log.Contains("Finished hooking FFakeStereoRendering", StringComparison.Ordinal))
-                    return;
+                    return game.Id;
                 await Task.Delay(500, token);
             }
             throw new TimeoutException("VR was loaded, but startup was not confirmed. Check the game before trying again.");
@@ -249,7 +338,8 @@ internal static class GameLaunch
             {
                 try
                 {
-                    if (!process.HasExited && SamePath(process.MainModule!.FileName, gamePath)) matches.Add(process);
+                    if (process.HasExited) { process.Dispose(); continue; }
+                    if (SamePath(process.MainModule!.FileName, gamePath)) matches.Add(process);
                     else { process.Dispose(); throw new InvalidOperationException("Far Far West is running from a different folder. Close it or update Setup & options."); }
                 }
                 catch { process.Dispose(); throw; }

@@ -8,4 +8,6 @@ The supported local package builder is `../scripts/Build-Package.ps1`. On a new 
 
 `Program.cs` contains the existing launch and native loading sequence. `Setup.cs` contains Steam discovery, preferences, first-use profile installation and the focused launcher options screen. The universal UEVR frontend is not launched. The backend's in-game menu is still upstream UEVR.
 
+`Updater.cs` performs private release checks and package staging off the render thread; its token is read from `%LOCALAPPDATA%\FarFarWestVRLauncher\github_token.txt`. The staged archive is validated against its SHA-256 manifest and pinned backend hashes. `Apply-Update.ps1` is launched on the next launcher start, waits for the launcher and game to exit, then replaces package files with rollback backups.
+
 Historical October 23 validation is preserved in `VALIDATION.md`; subsequent checks are appended by date.

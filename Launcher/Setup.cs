@@ -9,11 +9,16 @@ internal sealed class Setup
 {
     public string GameFolder { get; set; } = "";
     public string RuntimeFolder { get; set; } = "";
-    public bool CloseAfterLaunch { get; set; } = true;
+    public bool CloseAfterLaunch { get; set; } = false;
     public const string ShippingRelative = @"FarFarWest\Binaries\Win64\FarFarWest-Win64-Shipping.exe";
     internal static bool UsePreviewPreferences { get; set; }
-    internal const string CurrentBackendHash = "240C5ACCB5A1E02862101A5809B10C22D9403A1B5ED1A3095DDF4CB29BA5EC73";
-    private const string OpenXrRegistryPath = @"SOFTWARE\Khronos\OpenXR\1";
+    internal const string CurrentBackendHash = "2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558";
+    internal static readonly string[] CompatibleBackendHashes = new[]
+    {
+        CurrentBackendHash,
+        "0CFB68B928FFA5F5516BA866AFB676EB716F99A72B05B736CC5FB3053DA94029",
+        "179BB4A6F61574AC16621E2C7C9E2E27F3AA328462243417D177527647315558"
+    };
     public static string SettingsPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWestVRLauncher", UsePreviewPreferences ? "preview-settings.json" : "settings.json");
     public static string ProfileFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UnrealVRMod", "FarFarWest-Win64-Shipping");
     public static Setup Load()
@@ -24,6 +29,7 @@ internal sealed class Setup
             try { value = JsonSerializer.Deserialize<Setup>(File.ReadAllText(SettingsPath)) ?? new(); }
             catch (Exception ex) when (ex is IOException or JsonException) { LauncherLog.Write("Settings could not be read: " + ex.Message); }
         }
+        value.CloseAfterLaunch = false; // Far Far VR remains available throughout the session.
         if (string.IsNullOrWhiteSpace(value.GameFolder)) value.GameFolder = DetectGame() ?? "";
         if (!UsePreviewPreferences)
         {
@@ -32,7 +38,7 @@ internal sealed class Setup
             foreach (string candidate in new[] { Path.Combine(AppContext.BaseDirectory, "UE5.8"), Path.Combine(AppContext.BaseDirectory, "dist", "FarFarVR", "UE5.8") })
             {
                 string backend = Path.Combine(candidate, "UEVRBackend.dll");
-                if (File.Exists(backend) && Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(backend))) == CurrentBackendHash)
+                if (File.Exists(backend) && CompatibleBackendHashes.Contains(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(backend)))))
                 {
                     value.RuntimeFolder = candidate;
                     break;
@@ -55,78 +61,15 @@ internal sealed class Setup
     public string BackendPath => Path.Combine(RuntimeFolder, "UEVRBackend.dll");
     public void Validate()
     {
-        ValidateSteam();
-        ValidateGame();
-        ValidateRuntime();
-        ValidateOpenXrRuntime();
-    }
-
-    public static string SteamStatus()
-    {
-        try
-        {
-            string? install = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string;
-            install = string.IsNullOrWhiteSpace(install)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam")
-                : install.Replace('/', Path.DirectorySeparatorChar);
-            return File.Exists(Path.Combine(install, "steam.exe"))
-                ? "Steam installation found."
-                : "Steam is required to start Far Far West. Install Steam and sign in before continuing.";
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
-        {
-            return "Could not check Steam: " + ex.Message;
-        }
-    }
-
-    private static void ValidateSteam()
-    {
-        string status = SteamStatus();
-        if (!status.StartsWith("Steam installation found.", StringComparison.Ordinal))
-            throw new IOException(status);
-    }
-
-    public void ValidateGame()
-    {
         if (string.IsNullOrWhiteSpace(GameFolder) || !File.Exists(GamePath)) throw new IOException("Select the FarFarWest installation folder in Setup & options.");
-    }
-
-    public void ValidateRuntime()
-    {
         foreach (string name in new[] { "UEVRBackend.dll", "LuaVR.dll", "openxr_loader.dll", "openvr_api.dll" })
-            if (string.IsNullOrWhiteSpace(RuntimeFolder) || !File.Exists(Path.Combine(RuntimeFolder, name)))
-                throw new IOException($"The compatible Far Far VR runtime is missing '{name}'. Use a complete, licensed Far Far VR package; stock UEVR builds are not compatible.");
+            if (!File.Exists(Path.Combine(RuntimeFolder, name))) throw new IOException("VR runtime file missing: " + name + ". Select the compatible runtime folder in Setup & options.");
         using var backend = File.OpenRead(BackendPath);
         string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(backend));
-        bool accepted = hash == CurrentBackendHash;
+        bool accepted = CompatibleBackendHashes.Contains(hash);
         bool menuPreview = UsePreviewPreferences && hash == "DCDFF1DAB571EF183DE7D5697A60F450A8D50308F0E67B15785382919261B019";
         if (!accepted && !menuPreview)
-            throw new IOException($"This VR runtime is not the required Far Far West build (expected backend SHA-256 {CurrentBackendHash}, found {hash}). Stock or other UEVR builds are rejected to preserve the required game fixes.");
-    }
-
-    public static string OpenXrStatus()
-    {
-        try
-        {
-            string? activeRuntime = Registry.GetValue($@"HKEY_CURRENT_USER\{OpenXrRegistryPath}", "ActiveRuntime", null) as string
-                ?? Registry.GetValue($@"HKEY_LOCAL_MACHINE\{OpenXrRegistryPath}", "ActiveRuntime", null) as string;
-            if (string.IsNullOrWhiteSpace(activeRuntime))
-                return "No active OpenXR runtime is configured. Install and start your headset's PCVR software, then set it as the active OpenXR runtime.";
-            if (!Path.IsPathRooted(activeRuntime) || !File.Exists(activeRuntime))
-                return $"The active OpenXR runtime is configured but its target is missing: {activeRuntime}";
-            return $"OpenXR runtime configured: {Path.GetFileName(activeRuntime)}. Start the headset's PCVR app and connect the headset before playing.";
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
-        {
-            return "Could not check the active OpenXR runtime: " + ex.Message;
-        }
-    }
-
-    private static void ValidateOpenXrRuntime()
-    {
-        string status = OpenXrStatus();
-        if (!status.StartsWith("OpenXR runtime configured:", StringComparison.Ordinal))
-            throw new IOException(status);
+            throw new IOException("This VR runtime does not contain the current Far Far West fixes. Use the UE5.8 folder from the current Far Far VR package.");
     }
     public static string? DetectGame()
     {
@@ -182,12 +125,23 @@ internal sealed class Setup
     private static void EnsureMenuModule()
     {
         var changes = new List<(string Source, string Target)>();
-        foreach (string name in new[] { "farfarvr_settings.lua", "farfarvr_menu.lua", "farfarvr_input.lua", "farfarvr_hud.lua", "farfarvr_objectives.lua", "farfarvr_comfort.lua", "farfarvr_mount.lua", "farfarvr_render_fix.lua" })
+        foreach (string name in new[] { "farfarvr_settings.lua", "farfarvr_menu.lua", "farfarvr_input.lua", "farfarvr_hud.lua", "farfarvr_objectives.lua", "farfarvr_comfort.lua", "farfarvr_mount.lua", "farfarvr_effects.lua", "farfarvr_render_fix.lua" })
         {
             string source = Path.Combine(AppContext.BaseDirectory, "Profile", "scripts", name);
             if (!File.Exists(source)) throw new IOException("A Far Far VR module is missing. Use a complete package with its Profile folder.");
             string target = Path.Combine(ProfileFolder, "scripts", name);
             if (!File.Exists(target) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(target))) changes.Add((source,target));
+        }
+        foreach (string name in new[] { "farfarvr_controls.png", "farfarvr_controls.jpg" })
+        {
+            string source = Path.Combine(AppContext.BaseDirectory, "Profile", name);
+            if (File.Exists(source))
+            {
+                string target = Path.Combine(ProfileFolder, name);
+                if (!File.Exists(target) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(target))) changes.Add((source,target));
+                string targetTex = Path.Combine(ProfileFolder, "textures", name);
+                if (!File.Exists(targetTex) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(targetTex))) changes.Add((source,targetTex));
+            }
         }
         if (changes.Count == 0) return;
         var running = Process.GetProcessesByName("FarFarWest-Win64-Shipping");
@@ -215,7 +169,7 @@ internal sealed class Setup
         string journal = Path.Combine(ProfileFolder, "data", "farfarvr-comfort-restore.txt");
         if (!File.Exists(journal)) return;
         var overrides = new Dictionary<string,string> {
-            ["VR_AimMethod"]="0", ["UI_FollowView"]="false",
+            ["VR_MovementOrientation"]="0", ["VR_AimMethod"]="0", ["UI_FollowView"]="false",
             ["VR_DecoupledPitchUIAdjust"]="false", ["VR_2DScreenMode"]="true",
             ["VR_RoomscaleMovement"]="false", ["VR_NativeStereoFix"]="false",
             ["VR_DecoupledPitch"]="false"
@@ -227,7 +181,7 @@ internal sealed class Setup
             string[] pair = line.Split('=', 2);
             if (pair.Length != 2 || !overrides.TryGetValue(pair[0], out string? temporary)) continue;
             string value = pair[1];
-            bool valid = pair[0] == "VR_AimMethod" ? Regex.IsMatch(value, "^[0-5]$") : value is "true" or "false";
+            bool valid = (pair[0] == "VR_AimMethod" || pair[0] == "VR_MovementOrientation") ? Regex.IsMatch(value, "^[0-5]$") : value is "true" or "false";
             if (!valid) continue;
             recovered = Regex.Replace(recovered, "(?m)^(" + Regex.Escape(pair[0]) + "=)" + temporary + "(?=\\r?$)", match => match.Groups[1].Value + value);
         }
@@ -239,34 +193,7 @@ internal sealed class Setup
     }
 }
 
-internal static class PackageVerifier
-{
-    private static readonly string[] ProfileFiles =
-    [
-        "config.txt",
-        "cameras.txt",
-        "VRSettings.json",
-        "_interaction_profiles_oculus_touch_controller.json",
-        "scripts/farfarvr_settings.lua",
-        "scripts/farfarvr_menu.lua",
-        "scripts/farfarvr_input.lua",
-        "scripts/farfarvr_hud.lua",
-        "scripts/farfarvr_objectives.lua",
-        "scripts/farfarvr_comfort.lua",
-        "scripts/farfarvr_mount.lua",
-        "scripts/farfarvr_render_fix.lua"
-    ];
 
-    internal static void Validate(string packageRoot)
-    {
-        string profileRoot = Path.Combine(packageRoot, "Profile");
-        foreach (string relative in ProfileFiles)
-        {
-            string path = Path.Combine(profileRoot, relative.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(path)) throw new IOException("Packaged Far Far VR profile file is missing: " + relative);
-        }
 
-        var setup = new Setup { RuntimeFolder = Path.Combine(packageRoot, "UE5.8") };
-        setup.ValidateRuntime();
-    }
-}
+
+

@@ -2,8 +2,10 @@
 local api=uevr.api
 local state,fault,elapsed=nil,nil,0
 local function alive(o) return o~=nil and UEVR_UObjectHook.exists(o) end
+local rotator_struct
 local function rot(p,y,r)
-    local value=StructObject.new(assert(api:find_uobject('ScriptStruct /Script/CoreUObject.Rotator')))
+    rotator_struct = rotator_struct or assert(api:find_uobject('ScriptStruct /Script/CoreUObject.Rotator'))
+    local value=StructObject.new(rotator_struct)
     value.Pitch=p; value.Yaw=y; value.Roll=r
     return value
 end

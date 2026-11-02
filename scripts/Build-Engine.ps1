@@ -1,17 +1,13 @@
 param(
     [string]$SourceFolder = (Join-Path $PSScriptRoot '..\vendor\UEVR'),
     [string]$BuildFolder = (Join-Path $PSScriptRoot '..\vendor\UEVR-build'),
-    [string]$BuildToolsFolder = ''
+    [string]$BuildToolsFolder = 'C:\BuildTools\VS2022'
 )
 $ErrorActionPreference = 'Stop'
 $sourceRoot = (Resolve-Path -LiteralPath $SourceFolder).Path
 $expected = '963b157573eaef20528b602d1d9790b8105819b3'
 $revision = git -C $sourceRoot rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $revision -ne $expected) { throw 'Source must match the pinned Far Far West compatibility revision.' }
-$nativePatch = Join-Path $PSScriptRoot '..\Engine\cinema-comfort.patch'
-git -C $sourceRoot apply --reverse --check $nativePatch 2>$null
-if ($LASTEXITCODE -ne 0) { throw 'The Far Far West native patch is missing. Run Prepare-Engine.ps1 first.' }
-$BuildToolsFolder = & (Join-Path $PSScriptRoot 'Find-VS2022.ps1') -Path $BuildToolsFolder
 $sdkRoot = Join-Path $sourceRoot 'dependencies\submodules\UESDK'
 if (!(Test-Path -LiteralPath (Join-Path $sdkRoot CMakeLists.txt))) {
     throw 'UESDK source is unavailable. Link GitHub to Epic Games, accept the organization invitation, authenticate local Git, then run git submodule update --init --recursive inside vendor/UEVR. See Engine/README.md.'

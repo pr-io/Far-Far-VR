@@ -81,5 +81,6 @@ menu preview is excluded from this build, as in the accepted normal runtime.
 5. Ride, look with both stick axes, move the hand independently, then dismount.
    Check camera comfort/collision and restoration of normal gun aim.
 
-The prior playable runtime and package are retained in a local recovery copy
-outside GitHub. Close the game before restoring a previous runtime.
+Pre-change runtime, launchers, package and profile are under
+`H:/UEVR/diagnostics/final-polish-20261027/`. Close the game before rollback.
+

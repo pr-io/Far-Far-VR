@@ -1,0 +1,17 @@
+# Far Far VR launcher and headset menu - October 30, 2026
+
+The launcher still requires START IN VR. It stays open and above the desktop game during launch, showing waiting-for-game and changing-to-VR stages. It no longer exits after injection, including with older saved CloseAfterLaunch preferences.
+
+The in-headset Far Far VR panel replaces the universal UEVR menu for the exact FarFarWest-Win64-Shipping.exe process. It uses the existing framework overlay, input capture, projection and head-front positioning. No desktop window capture, second renderer or tracking solver is added. The desktop launcher remains available; after the headset panel takes over, its topmost flag is released so it does not block game focus.
+
+The first welcome opens once, after the native renderer has successfully submitted a frame, the headset is active, the panel is registered, and readiness remains continuous for 500 ms. This preserves the startup quiet period. Closing it does not trigger automatic reopening. The header and Welcome page explain: hold Start for 0.5 seconds to show/hide; quick Start retains the game menu. Insert remains available. Existing controls are unchanged.
+
+Pages: Welcome, Comfort, Calibration, Input, Interface, Display. The shared catalog has 23 supported controls: turning/movement, height/camera/world scale, tracked aiming/deadzones, HUD/menu placement, frame-rate overlay and desktop mirror. Recenter, current-height calibration, live edits, explicit save, and revert remain available. The Return to game footer stays visible while content scrolls. Game graphics/AA stay in game settings, headset resolution/refresh rate stay in PCVR settings. Compatibility switches, developer tabs, other-game options and button remapping are omitted.
+
+The launcher reads a short live session heartbeat. It accepts only the target game PID and a fresh heartbeat; show/hide requests additionally include the current session token, unique request ID and a five-second expiry. Stale, prior-process and prior-session requests cannot control a new session. It waits through headset disconnects and returns to the start screen when the game exits. Closing the desktop launcher leaves the game and headset menu running.
+
+Preservation: input, gun crosshair/hit X, POI, comfort/cinema/TAA, mount, POV event effects and existing configuration/bindings retain their previous files. Only the menu script and generated settings catalog change among the eight Lua modules. The native addition changes UI routing and startup/status handoff; the prior scene renderer and compositor effects paths are retained.
+
+Software verification: backend/launcher builds; 84 Lua profile tests; 33 upstream native checks; menu startup/command-isolation policy checks; launcher heartbeat and request tests. Desktop launcher/settings were opened and inspected. Windows denied automated input (GetCursorPos: Access is denied, 0x80070005) after activation recovery. Live game/headset handoff, controller use and frame timing remain unverified; software tests do not establish wearer acceptance.
+
+Recovery: close the game, then run H:/UEVR/diagnostics/unified-menu-20261030/Restore-Previous-Runtime.ps1 to restore the previous backend, launchers, menu and catalog. Existing gameplay modules/configuration are not replaced. For the original universal menu in this backend, create an empty farfarvr-original-menu.enabled file in the installed profile and restart; remove/rename it and restart to restore Far Far VR. The legacy farfarvr-menu.enabled preview marker is no longer required.

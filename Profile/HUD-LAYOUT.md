@@ -1,5 +1,7 @@
 # Original animated gun crosshair
 
+**October 31 correction:** [FIRING-AIM-20261031.md](FIRING-AIM-20261031.md) supersedes the older implementations below. Drawn firearms use the game firing-camera ray sampled per stereo view; the empty-hand dot uses tracked right-hand aim. Crosshair and hit X remain on one private compositor layer, separate from the information HUD.
+
 **2026-10-26 update:** the v8 implementation supersedes the v7 description below.
 The crosshair now has a separate 2 m world aim surface with 2x raster sampling;
 health/corners remain on the accepted distant compositor HUD. Marker hosting no

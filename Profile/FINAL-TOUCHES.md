@@ -29,6 +29,9 @@ black remote-session display, repeated graphics `Present failed: 87a0001` errors
 and denied desktop input. No live tutorial intro, new-game intro or outro has
 passed acceptance. OpenXR and headset movement/rendering remain unverified.
 
+Backup before this follow-up:
+`H:/UEVR/diagnostics/cutscene-comfort-20261026-112114/`.
+
 ## Earlier HUD, menu and mount pass
 
 Changes:
@@ -82,11 +85,14 @@ desktop input worked. The new modules loaded in the real offline saloon:
 
 These checks do not establish headset rendering or comfort. The offline run was
 closed; the exact pre-test config was restored to avoid incidental engine-save
-changes. Controller bindings remain byte-for-byte unchanged. Native status
-files and the runtime inventory are retained only in the local recovery copy.
+changes. Controller bindings remain byte-for-byte unchanged. Native status files
+and the runtime inventory are in the backup directory below.
 
 Required runtime checks: notice/title/options/pause/menu transitions with a moving
 head and right hand; saloon POIs with a stationary head and moving controller;
 mission POIs; horse walk/sprint/turn/dismount; separate crosshair visibility,
 sharpness, hit feedback and shot alignment with head/hand movement independently.
 Do not interpret the code checks as these checks passing.
+
+Pre-change active profile and scripts:
+`H:/UEVR/diagnostics/final-touches-20261026-104320/`.

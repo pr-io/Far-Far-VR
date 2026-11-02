@@ -39,3 +39,5 @@ stereo/depth was confirmed by the wearer. After final cleanup and guard reload,
 the wearer resumed the headset, repeated combat and checked cutscene borders:
 "Combat and cutscene borders both good". Live logs also confirmed restoration
 of the validated right-eye resource after resuming.
+
+Evidence and prior copies: H:/UEVR/diagnostics/combat-split-before/.

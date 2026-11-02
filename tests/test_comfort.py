@@ -7,12 +7,13 @@ sys.path.insert(0,str(ROOT/'tools/lua-test'))
 from lupa.lua54 import LuaRuntime
 
 class ComfortTests(unittest.TestCase):
- def setup_lua(self,journal='',persisted_aim='2'):
+ def setup_lua(self,journal='',persisted_aim='2',persisted_move='1'):
   lua=LuaRuntime()
   lua.globals().initial_journal=journal
   lua.globals().persisted_aim=persisted_aim
+  lua.globals().persisted_move=persisted_move
   lua.execute('''
-  values={VR_AimMethod=persisted_aim,UI_FollowView='true',VR_DecoupledPitchUIAdjust='true',VR_DecoupledPitch='true',VR_2DScreenMode='false',VR_RoomscaleMovement='true',VR_NativeStereoFix='true'}
+  values={VR_MovementOrientation=persisted_move,VR_AimMethod=persisted_aim,UI_FollowView='true',VR_DecoupledPitchUIAdjust='true',VR_DecoupledPitch='true',VR_2DScreenMode='false',VR_RoomscaleMovement='true',VR_NativeStereoFix='true'}
   aa_method,taa_scaling=2,1
   local aa={get_int=function() return aa_method end}
   local scaling={get_int=function() return taa_scaling end,set_int=function(_,v) taa_scaling=v end}
@@ -29,8 +30,19 @@ class ComfortTests(unittest.TestCase):
   pc={Pawn=pawn('BP_Player_C'),bShowMouseCursor=false,GetViewTarget=function(self) return self.target or self.Pawn end}
   pc.get_class=function() return klass(pc) end
   hmd_active=true
+  tracking_ready=true
+  pose={x=.1,y=1.7,z=.2}
+  origin={x=0,y=1.6,z=0}
+  origin_writes=0
+  UEVR_Vector3f={new=function() return {x=0,y=0,z=0} end}
+  UEVR_Quaternionf={new=function() return {x=0,y=0,z=0,w=1} end}
   uevr={api={get_console_manager=function() return console end,get_player_controller=function() return pc end,find_uobject=function() return camera_class end},params={vr={
    is_hmd_active=function() return hmd_active end,
+   is_runtime_ready=function() return tracking_ready end,
+   get_hmd_index=function() return 0 end,
+   get_pose=function(index,p,r) assert(index==0); p.x=pose.x; p.y=pose.y; p.z=pose.z end,
+   get_standing_origin=function(o) o.x=origin.x; o.y=origin.y; o.z=origin.z end,
+   set_standing_origin=function(o) origin={x=o.x,y=o.y,z=o.z}; origin_writes=origin_writes+1 end,
    get_mod_value=function(self,k) return values[k] end,
    set_mod_value=function(k,v) assert(type(k)=='string'); values[k]=v end}},
    sdk={callbacks={on_pre_engine_tick=function(f) tick=f end,on_post_engine_tick=function(f) post_tick=f end,on_script_reset=function(f) reset=f end}}}
@@ -68,6 +80,14 @@ class ComfortTests(unittest.TestCase):
   assert(values.VR_2DScreenMode=='true')
   assert(files['farfarvr-comfort-status.txt']:find('guard unavailable',1,true))
   ''')
+ def test_idle_does_not_query_rendering_variables(self):
+  self.setup_lua().execute('''
+  hmd_active=false
+  uevr.api.get_console_manager=function() error('Idle must not access console variables') end
+  tick(nil,4)
+  assert(values.VR_NativeStereoFix=='false')
+  assert(not files['farfarvr-taa-status.txt'])
+  ''')
  def test_rejected_taa_write_does_not_disable_camera_transitions(self):
   self.setup_lua().execute('''
   console.find_variable=function(_,key)
@@ -100,6 +120,28 @@ class ComfortTests(unittest.TestCase):
   pc.target=pc.Pawn; pc.Pawn=pawn('BP_Player_C'); tick(nil,.1); assert(values.VR_AimMethod=='0')
   pc.target=nil; tick(nil,.1); assert(values.VR_AimMethod=='2')
   ''')
+ def test_emote_orbit_and_horse_movement_restore_after_menu_and_dismount(self):
+  self.setup_lua().execute("""
+  tick(nil,.1)
+  pc.Pawn.isPlayingEmote=true; tick(nil,.1)
+  assert(values.VR_AimMethod=='0' and values.VR_MovementOrientation=='1')
+  assert(values.UI_FollowView=='true' and values.VR_2DScreenMode=='false')
+  pc.Pawn.isPlayingEmote=false; tick(nil,.1); assert(values.VR_AimMethod=='2')
+  pc.Pawn=pawn('BP_Mount_C'); tick(nil,.1)
+  assert(values.VR_MovementOrientation=='0' and values.VR_AimMethod=='0')
+  pc.bShowMouseCursor=true; tick(nil,.1); assert(values.VR_MovementOrientation=='1')
+  pc.bShowMouseCursor=false; tick(nil,.1); assert(values.VR_MovementOrientation=='0')
+  pc.Pawn=pawn('BP_Player_C'); tick(nil,.1)
+  assert(values.VR_MovementOrientation=='1' and values.VR_AimMethod=='2')
+  pc.Pawn=pawn('BP_Mount_C'); tick(nil,.1); reset()
+  assert(values.VR_MovementOrientation=='1' and values.VR_AimMethod=='2')
+  """)
+ def test_mounted_crash_recovers_head_movement(self):
+  self.setup_lua('VR_MovementOrientation=1',persisted_move='0').execute("""
+  assert(values.VR_MovementOrientation=='1')
+  pc.Pawn=pawn('BP_Mount_C'); tick(nil,.1); assert(values.VR_MovementOrientation=='0')
+  reset(); assert(values.VR_MovementOrientation=='1')
+  """)
  def test_reset_and_camera_preference_preserved(self):
   self.setup_lua().execute('''
   values.VR_AimMethod='4'; pc.bShowMouseCursor=true; tick(nil,.1)
@@ -188,6 +230,29 @@ class ComfortTests(unittest.TestCase):
   pc.Pawn.isInCinematic=false; post_tick()
   assert(values.VR_NativeStereoFix=='true' and values.VR_2DScreenMode=='false')
   hmd_active=false; post_tick(); reset(); assert(values.VR_NativeStereoFix=='true')
+  ''')
+ def test_taa_guard_recovers_after_temporary_write_failure(self):
+  self.setup_lua().execute('''
+  local find=console.find_variable
+  local rejected=true
+  console.find_variable=function(self,key)
+   if key=='r.TemporalAA.Upsampling' and rejected then
+    return {get_int=function() return 1 end,set_int=function() end}
+   end
+   return find(self,key)
+  end
+  tick(nil,.1); assert(files['farfarvr-taa-status.txt']:find('ERROR',1,true))
+  rejected=false
+  tick(nil,1.1); assert(taa_scaling==0 and aa_method==2)
+  aa_method=1; tick(nil,.1); assert(taa_scaling==1 and aa_method==1)
+  ''')
+ def test_game_tick_cannot_leave_taa_scaling_reenabled_before_render(self):
+  self.setup_lua().execute('''
+  tick(nil,.1); assert(taa_scaling==0)
+  taa_scaling=1 -- game settings/effect write during the engine tick
+  post_tick(); assert(taa_scaling==0 and aa_method==2)
+  aa_method=1; post_tick(); assert(taa_scaling==1 and aa_method==1)
+  aa_method=4; post_tick(); assert(taa_scaling==1 and aa_method==4)
   ''')
 
 if __name__=='__main__': unittest.main()
