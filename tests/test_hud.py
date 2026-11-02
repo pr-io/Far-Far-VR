@@ -85,7 +85,7 @@ class HudTests(unittest.TestCase):
   self.check("""local s=built();assert(component.set_DrawSize.X==256 and component.set_DrawSize.Y==256)
   assert(component.set_RenderInMainPass==false and component.set_RenderInDepthPass==false and component.set_CastShadow==false)
   assert(component.set_VisibleInRayTracing==false and component.set_CollisionEnabled==0 and component.set_WindowFocusable==false)
-  assert(component.BackgroundColor.A==0 and component.bReceiveHardwareInput==false and component.TickWhenOffscreen and component.bManuallyRedraw)
+  assert(component.BackgroundColor.A==0 and component.bReceiveHardwareInput==false and component.TickWhenOffscreen and component.bManuallyRedraw==false)
   assert(component.set_Widget==host and not host:IsInViewport() and host.stopped)""")
  def test_native_material_and_hit_animation_state_are_preserved(self):
   self.check("""local s=built();hud.HitImage.RenderOpacity=.7;hud.HitImage.RenderTransform.Angle=15;update(s,pc,.02)

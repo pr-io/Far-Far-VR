@@ -142,9 +142,11 @@ local function build(pawn,pc,hud)
         if s.component:get_class():find_function(method) then s.component[method](s.component,false) end
     end
     if s.component:get_class():find_property('BackgroundColor') then s.component.BackgroundColor=native('CoreUObject.LinearColor',{R=0,G=0,B=0,A=0}) end
-    s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=true;s.component:SetWindowFocusable(false)
+    s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=false;s.component:SetWindowFocusable(false)
     if s.component:get_class():find_property('bReceiveHardwareInput') then s.component.bReceiveHardwareInput=false end
-    s.component:SetWidget(s.host);s.component:RequestRedraw()
+    s.component:SetWidget(s.host)
+    if s.component:get_class():find_function('RequestRenderUpdate') then s.component:RequestRenderUpdate() end
+    s.component:RequestRedraw()
     s.token=string.format('%.0f',s.component:get_address());bridge('Source',s.token)
     fault=nil;log('Dedicated 256x256 gun reticle compositor layer; crosshair and hit X share private artwork host; no information-HUD projection.')
 end
@@ -272,7 +274,9 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
         status_time=status_time+dt
         if status_time>=3 then
             status_time=0;local s=state
-            fs.write('farfarvr-hud-status.txt',s and ('Independent gun compositor layer v13\nCrosshair, hit X and shield hit share one private 256x256 widget\nAttached to information HUD: false\nAim source '..tostring(s.aim_source)..'\nPer-view aim updates '..tostring(s.aim_updates or 0)..'\nNative ready '..tostring(s.ready)..'\nVisible '..tostring(s.showing)..'\nArtwork updates '..s.updates) or 'Waiting for gameplay HUD sources')
+            local rt = s and s.component:get_class():find_function('GetRenderTarget') and s.component:GetRenderTarget()
+            local rt_desc = rt and string.format('%s', tostring(rt:get_full_name())) or 'nil'
+            fs.write('farfarvr-hud-status.txt',s and ('Independent gun compositor layer v13\nCrosshair, hit X and shield hit share one private 256x256 widget\nAttached to information HUD: false\nAim source '..tostring(s.aim_source)..'\nPer-view aim updates '..tostring(s.aim_updates or 0)..'\nNative ready '..tostring(s.ready)..'\nVisible '..tostring(s.showing)..'\nRenderTarget '..rt_desc..'\nArtwork updates '..s.updates) or 'Waiting for gameplay HUD sources')
         end
     end)
     if not ok then recover_hud(err) end
