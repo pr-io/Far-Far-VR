@@ -19,11 +19,13 @@ internal sealed class UpdateService
     private static readonly string TokenPath = Path.Combine(LocalRoot, "github_token.txt");
     private readonly HttpClient client;
     private readonly string profile;
+    private readonly Func<string?> tokenProvider;
 
-    internal UpdateService(string profile, HttpClient? client = null)
+    internal UpdateService(string profile, HttpClient? client = null, Func<string?>? tokenProvider = null)
     {
         this.profile = profile;
         this.client = client ?? new HttpClient();
+        this.tokenProvider = tokenProvider ?? ReadToken;
     }
 
     internal static bool StartPendingApply(string[] args)
@@ -58,15 +60,13 @@ internal sealed class UpdateService
 
     internal async Task<ReleaseUpdate?> CheckAsync(CancellationToken cancellationToken = default)
     {
-        string token = ReadToken();
-        using var request = new HttpRequestMessage(HttpMethod.Get,
+        using var request = CreateRequest(HttpMethod.Get,
             $"https://api.github.com/repos/{Repository}/releases?per_page=30");
         request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.0");
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new IOException("The private update repository is unavailable. Check the launcher token and repository access.");
+            throw new IOException("The update repository is unavailable. If it is private, check the launcher token and repository access.");
         response.EnsureSuccessStatusCode();
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
         return FindUpdate(document.RootElement, CurrentVersion);
@@ -84,9 +84,8 @@ internal sealed class UpdateService
         string temporary = Path.Combine(PendingRoot, "package-" + Guid.NewGuid().ToString("N"));
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, release.DownloadUrl);
+            using var request = CreateRequest(HttpMethod.Get, release.DownloadUrl);
             request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.0");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ReadToken());
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is > 2_000_000_000)
@@ -184,10 +183,24 @@ internal sealed class UpdateService
     private static Version ParseVersion(string value) =>
         TryParseVersion(value, out Version? version) ? version! : throw new ArgumentException("Invalid launcher version.", nameof(value));
 
-    private string ReadToken()
+    private HttpRequestMessage CreateRequest(HttpMethod method, string uri) =>
+        CreateRequest(method, new Uri(uri, UriKind.Absolute));
+
+    private HttpRequestMessage CreateRequest(HttpMethod method, Uri uri)
+    {
+        var request = new HttpRequestMessage(method, uri);
+        string? token = tokenProvider();
+        if (token is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return request;
+    }
+
+    private static string? ReadToken()
     {
         if (!File.Exists(TokenPath))
-            throw new IOException($"Private update access is not configured. Save a GitHub token with repository Contents: read access to {TokenPath}.");
+            return null;
         string token = File.ReadAllText(TokenPath).Trim();
         if (token.Length is < 20 or > 512 || token.Any(char.IsWhiteSpace))
             throw new IOException("The GitHub token file is empty or malformed.");

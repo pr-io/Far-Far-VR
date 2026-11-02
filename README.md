@@ -2,9 +2,13 @@
 
 Far Far VR is an unofficial **PCVR mod for Far Far West**, distributed with its launcher and injector. It runs with the Windows PC version of the game and a supported PCVR headset; it is not a native standalone-headset app. This repository contains the launcher, player profile, game-specific Lua modules, OpenXR Touch bindings, engine patches, headers, and build/package scripts. It is designed exclusively for Far Far West and does not require generic UEVR tools or separate configuration.
 
+> **Early access:** Far Far VR is still in active development. Compatibility and comfort can vary by PC, headset, OpenXR runtime, and game update; back up your profile and settings before installing. This is a Windows PCVR mod, not a standalone-headset app.
+
 > **Current Backend:** The verified Far Far VR runtime backend has SHA-256 `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558`. The launcher rejects stock or mismatched backends to ensure game-specific cinematic, controls, and comfort fixes are preserved. See [third-party notices](THIRD_PARTY.md).
 
 ## Player Installation & Launch
+
+Requirements: 64-bit Windows 10/11, Far Far West installed through Steam, a compatible PCVR headset, and an active OpenXR runtime.
 
 1. Extract the Far Far VR package.
 2. Run **Far Far VR.exe**. In **Settings & options**, confirm the detected Steam installation folder for Far Far West.
@@ -20,7 +24,12 @@ Far Far VR is an unofficial **PCVR mod for Far Far West**, distributed with its 
 
 ### In-Menu Updates
 
-The **Updates** tab asks the launcher to check the private `pr-io/Far-Far-VR` release list in the background. For private release access, save a fine-grained GitHub token limited to this repository with **Contents: read-only** access at `%LOCALAPPDATA%\FarFarWestVRLauncher\github_token.txt`. The launcher never writes the token into the profile or release files. Downloaded packages are staged under `%LOCALAPPDATA%\FarFarWestVRLauncher\pending_update`; the next launcher start applies them only after the launcher and game have exited.
+The **Updates** tab checks the `pr-io/Far-Far-VR` GitHub release list in the background. Public releases need no token. While early-access releases remain private, save a fine-grained GitHub token limited to this repository with **Contents: read-only** access at `%LOCALAPPDATA%\FarFarWestVRLauncher\github_token.txt`. The launcher never writes the token into the profile or release files. Downloaded packages are staged under `%LOCALAPPDATA%\FarFarWestVRLauncher\pending_update`; the next launcher start applies them only after the launcher and game have exited.
+
+## Community
+
+- YouTube: [https://www.youtube.com/@PR_VR](https://www.youtube.com/@PR_VR)
+- Discord: [https://discord.gg/PcsYNa6MS9](https://discord.gg/PcsYNa6MS9) (VR Buddies Discord)
 
 ## Controls & In-Game Features
 
@@ -59,6 +68,7 @@ python -m unittest discover -s tests -v
 Run C# launcher and binding tests:
 ```powershell
 dotnet run --project tests\SessionLinkTests\SessionLinkTests.csproj
+dotnet run --project tests\SettingsIsolationTests\SettingsIsolationTests.csproj
 dotnet run --project tests\SocialBindingsTests\SocialBindingsTests.csproj
 dotnet run --project tests\UpdaterTests\UpdaterTests.csproj
 ```

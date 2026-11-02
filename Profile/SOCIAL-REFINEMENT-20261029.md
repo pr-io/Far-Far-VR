@@ -1,6 +1,6 @@
 # Emote confirmation, native riding controls and Y voice hold — October 29
 
-Use the normal `H:/UEVR/Far Far West VR.exe` launcher and press START IN VR.
+Use the normal `[local UEVR workspace]/Far Far West VR.exe` launcher and press START IN VR.
 
 - Quick both-stick click toggles the emote wheel. While hovering an emote,
   press A to select it. A is consumed until released so confirmation cannot

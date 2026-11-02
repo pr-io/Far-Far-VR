@@ -22,13 +22,20 @@ Copy-Item -LiteralPath (Join-Path $publishRoot 'FarFarWestVR.exe') -Destination 
 foreach ($name in @('UEVRBackend.dll', 'LuaVR.dll', 'openxr_loader.dll', 'openvr_api.dll', 'BUILD-SOURCE.txt')) {
     Copy-Item -LiteralPath (Join-Path $runtimeRoot $name) -Destination (Join-Path $packageRoot 'UE5.8')
 }
-Copy-Item -LiteralPath (Join-Path $projectRoot 'Profile') -Destination $packageRoot -Recurse
+New-Item -ItemType Directory -Path (Join-Path $packageRoot 'Profile') -Force | Out-Null
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'Profile') -File -Recurse |
+    Where-Object { $_.Extension -ne '.md' } |
+    ForEach-Object {
+        $relative = [IO.Path]::GetRelativePath((Join-Path $projectRoot 'Profile'), $_.FullName)
+        $destination = Join-Path (Join-Path $packageRoot 'Profile') $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+        Copy-Item -LiteralPath $_.FullName -Destination $destination
+    }
 foreach ($name in @('README.md', 'THIRD_PARTY.md', 'ROADMAP.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $packageRoot }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $packageRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Launcher\Apply-Update.ps1') -Destination (Join-Path $packageRoot 'Apply-Update.ps1')
+Copy-Item -LiteralPath (Join-Path $packageRoot 'Far Far VR.exe') -Destination (Join-Path $projectRoot 'Far Far VR.exe') -Force
 Set-Content -LiteralPath (Join-Path $packageRoot 'version.txt') -Value $version -Encoding ascii
-New-Item -ItemType Directory -Path (Join-Path $packageRoot 'Engine') -Force | Out-Null
-foreach ($name in @('README.md','VALIDATION.md','CINEMA-COMFORT.md','cinema-comfort.patch','farfar-console.patch','focused-menu.patch','FarFarWestCinema.hpp','FarFarWestConsole.hpp','FarFarWestControls.hpp','FarFarWestPointer.hpp','FarFarWestPointerProjection.hpp','FarFarWestEffects.hpp','FarFarWestMenu.hpp','FarFarWestReticle.hpp','FarFarWestGunLayer.hpp','FarFarWestMemoryProbe.hpp')) { Copy-Item -LiteralPath (Join-Path $projectRoot "Engine\$name") -Destination (Join-Path $packageRoot 'Engine') }
 Get-ChildItem -LiteralPath $packageRoot -Recurse -File | ForEach-Object {
     [PSCustomObject]@{ File = $_.FullName.Substring($packageRoot.TrimEnd("\").Length + 1); SHA256 = (Get-FileHash -LiteralPath $_.FullName).Hash }
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $packageRoot 'manifest.json') -Encoding utf8

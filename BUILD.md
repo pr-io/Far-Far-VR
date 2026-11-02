@@ -8,16 +8,18 @@ On Windows x64 with the .NET 8 SDK:
 dotnet publish Launcher\FarFarWestVR.csproj -c Release -r win-x64 -o Launcher\publish
 ```
 
-The published launcher includes self-contained dependencies. Copy `Launcher\publish\FarFarWestVR.exe` to `Far Far VR.exe` in the repository root or package folder.
+The published launcher is a self-contained Windows x64 executable and includes the .NET runtime, so players do not need to install .NET separately. Copy `Launcher\publish\FarFarWestVR.exe` to `Far Far VR.exe` in the repository root or package folder.
 
 Run the unit test suites:
 
 ```powershell
-# C# launcher & social bindings tests
+# C# launcher, settings isolation, and social bindings tests
 dotnet run --project tests\SessionLinkTests\SessionLinkTests.csproj
+dotnet run --project tests\SettingsIsolationTests\SettingsIsolationTests.csproj
 dotnet run --project tests\SocialBindingsTests\SocialBindingsTests.csproj
+dotnet run --project tests\UpdaterTests\UpdaterTests.csproj
 
-# Python / Lua behavior tests (96 tests)
+# Python / Lua behavior tests
 python -m unittest discover -s tests -v
 ```
 
@@ -40,7 +42,7 @@ The verified backend SHA-256 is `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D7
 
 ## Build a player package
 
-The package builder verifies the accepted backend hash, builds the launcher, copies the active profile and documentation, and stages a complete release package in `dist\FarFarVR`:
+The package builder verifies the accepted backend hash, builds the launcher, copies the player profile and documentation, and stages a complete release package in `dist\FarFarVR`:
 
 ```powershell
 pwsh -File scripts\Build-Package.ps1
@@ -50,6 +52,5 @@ The resulting package contains:
 - `Far Far VR.exe`
 - `UE5.8/` (UEVRBackend.dll, LuaVR.dll, openxr_loader.dll, openvr_api.dll, BUILD-SOURCE.txt)
 - `Profile/` (config.txt, cameras.txt, VRSettings.json, Touch bindings, Lua scripts)
-- `Engine/` (patches, C++ headers, and validation notes)
 - Player documentation (`README.md`, `ROADMAP.md`, `THIRD_PARTY.md`)
 - `manifest.json` (SHA-256 checksums of all package files)

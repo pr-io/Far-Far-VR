@@ -30,7 +30,7 @@ and denied desktop input. No live tutorial intro, new-game intro or outro has
 passed acceptance. OpenXR and headset movement/rendering remain unverified.
 
 Backup before this follow-up:
-`H:/UEVR/diagnostics/cutscene-comfort-20261026-112114/`.
+`[local UEVR workspace]/diagnostics/cutscene-comfort-20261026-112114/`.
 
 ## Earlier HUD, menu and mount pass
 
@@ -95,4 +95,4 @@ sharpness, hit feedback and shot alignment with head/hand movement independently
 Do not interpret the code checks as these checks passing.
 
 Pre-change active profile and scripts:
-`H:/UEVR/diagnostics/final-touches-20261026-104320/`.
+`[local UEVR workspace]/diagnostics/final-touches-20261026-104320/`.

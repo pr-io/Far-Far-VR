@@ -8,4 +8,4 @@ The getter cannot write settings, controls, the camera or gun. OverlayComponent 
 
 Checks: actual Lua menu return with a fixed HUD, gun-source independence from old scene anchors, pending/off-panel suppression without centered fallback, shared crosshair/hit-X parent and native animation state, pure native calibrated-ray projection for following and fixed/moved/rotated HUDs. Full profile suite: 86 tests. Build and software checks do not constitute a wearer test. Live headset/combat confirmation remains pending.
 
-Backup: H:/UEVR/diagnostics/gun-reticle-repair-20261030/.
+Backup: [local UEVR workspace]/diagnostics/gun-reticle-repair-20261030/.

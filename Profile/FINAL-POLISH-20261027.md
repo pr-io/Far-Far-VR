@@ -82,5 +82,5 @@ menu preview is excluded from this build, as in the accepted normal runtime.
    Check camera comfort/collision and restoration of normal gun aim.
 
 Pre-change runtime, launchers, package and profile are under
-`H:/UEVR/diagnostics/final-polish-20261027/`. Close the game before rollback.
+`[local UEVR workspace]/diagnostics/final-polish-20261027/`. Close the game before rollback.
 

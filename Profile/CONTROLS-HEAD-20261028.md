@@ -2,7 +2,7 @@
 
 This batch follows the wearer's positive gameplay report on the October 27
 build, with the remaining issues and control changes requested overnight.
-The normal `H:/UEVR/Far Far West VR.exe` launcher is the entry point.
+The normal `[local UEVR workspace]/Far Far West VR.exe` launcher is the entry point.
 
 | Gesture | Action |
 | --- | --- |
@@ -81,7 +81,7 @@ Backend SHA256 for this control batch (before the later regression repair):
 `11B89B0E8D6035A0B234041E223F92B69A4ABF8A5A0813B9A1FCD39782382AB7`.
 
 Pre-change source, runtime, launchers, input save and active profile:
-`H:/UEVR/diagnostics/controls-head-20261028/`.
+`[local UEVR workspace]/diagnostics/controls-head-20261028/`.
 Close the game before using `Restore-Previous-Runtime.ps1` there to restore
 the October 27 runtime, active profile and bundled profile. The updated native
 and launcher development sources are retained.

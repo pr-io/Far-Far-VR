@@ -8,4 +8,4 @@ The offscreen component has no scene main/depth pass, shadows, ray-tracing visib
 
 Checks: 80 current Lua profile tests (legacy HUD-projection tests replaced with private-layer ownership/lifecycle tests), standalone gun-layer pose/scale checks, 33 upstream native checks, backend and launcher builds. Tests explicitly reject reads of information-HUD settings and assert that crosshair/hit-X clones belong only to the private host. Existing seven other Lua modules, launcher flow, configuration and saved bindings are unchanged. Headset appearance, gun alignment, animation and performance remain pending wearer acceptance.
 
-Backup: H:/UEVR/diagnostics/independent-gun-layer-20261030/.
+Backup: [local UEVR workspace]/diagnostics/independent-gun-layer-20261030/.

@@ -22,7 +22,17 @@ Check(UpdateService.TryParseVersion("v0.4.1-playtest", out var playtest) && play
 var statusRoot = Path.Combine(Path.GetTempPath(), "farfarvr-updater-test-" + Guid.NewGuid().ToString("N"));
 try
 {
-    var service = new UpdateService(statusRoot, new HttpClient(new NeverCalledHandler()));
+    var publicHandler = new CapturingHandler();
+    var service = new UpdateService(statusRoot, new HttpClient(publicHandler), () => null);
+    Check(await service.CheckAsync() is null);
+    Check(publicHandler.Authorization is null);
+    Check(publicHandler.RequestUri == $"https://api.github.com/repos/{UpdateService.Repository}/releases?per_page=30");
+
+    var privateHandler = new CapturingHandler();
+    var privateService = new UpdateService(statusRoot, new HttpClient(privateHandler), () => "test-token");
+    Check(await privateService.CheckAsync() is null);
+    Check(privateHandler.Authorization == "Bearer test-token");
+
     service.WriteStatus("available", "v0.4.2", "Notes\nwith details");
     string status = File.ReadAllText(UpdateService.StatusPath(statusRoot));
     Check(status == "state=available\nversion=v0.4.2\nnotes:\nNotes\nwith details");
@@ -32,15 +42,25 @@ finally
     if (Directory.Exists(statusRoot)) Directory.Delete(statusRoot, recursive: true);
 }
 
-Console.WriteLine("Private release selection, prerelease tag parsing, status output, and no-update checks passed.");
+Console.WriteLine("Public/private release authentication, prerelease tag parsing, status output, and no-update checks passed.");
 
 void Check(bool condition)
 {
     if (!condition) throw new Exception("Updater smoke test failed.");
 }
 
-sealed class NeverCalledHandler : HttpMessageHandler
+sealed class CapturingHandler : HttpMessageHandler
 {
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-        throw new Exception("The updater smoke tests must not make network requests.");
+    public string? Authorization { get; private set; }
+    public string? RequestUri { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        Authorization = request.Headers.Authorization?.ToString();
+        RequestUri = request.RequestUri?.ToString();
+        return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]")
+        });
+    }
 }

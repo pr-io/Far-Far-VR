@@ -40,4 +40,4 @@ the wearer resumed the headset, repeated combat and checked cutscene borders:
 "Combat and cutscene borders both good". Live logs also confirmed restoration
 of the validated right-eye resource after resuming.
 
-Evidence and prior copies: H:/UEVR/diagnostics/combat-split-before/.
+Evidence and prior copies: [local UEVR workspace]/diagnostics/combat-split-before/.
