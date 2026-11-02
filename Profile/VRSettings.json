@@ -65,7 +65,7 @@
     "key": "OpenXR_ResolutionScale",
     "label": "Resolution scale",
     "kind": "float",
-    "default": 0.8,
+    "default": 1.0,
     "min": 0.5,
     "max": 1.5,
     "description": "Adjusts the VR render resolution scale. Lower values improve frame rate."

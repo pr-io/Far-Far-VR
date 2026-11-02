@@ -68,10 +68,11 @@ local function cleanup()
     end
 end
 local function show_marker(s,visible)
-    if s.showing==visible and s.originals_showing==not visible then return end
+    local suppress_originals=visible and s.ready
+    if s.showing==visible and s.originals_showing==not suppress_originals then return end
     s.reticle:SetVisibility(visible and 4 or 2)
-    for _,item in ipairs(s.images) do item.wrapper:SetVisibility(visible and 2 or 4) end
-    s.showing=visible;s.originals_showing=not visible;s.dirty=true
+    for _,item in ipairs(s.images) do item.wrapper:SetVisibility(suppress_originals and 2 or 4) end
+    s.showing=visible;s.originals_showing=not suppress_originals;s.dirty=true
 end
 local function sync_images(s)
     local origin=s.images[1].layout.Offsets
@@ -144,7 +145,7 @@ local function build(pawn,pc,hud)
     if s.component:get_class():find_property('BackgroundColor') then s.component.BackgroundColor=native('CoreUObject.LinearColor',{R=0,G=0,B=0,A=0}) end
     s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=true;s.component:SetWindowFocusable(false)
     if s.component:get_class():find_property('bReceiveHardwareInput') then s.component.bReceiveHardwareInput=false end
-    s.component:SetWidget(s.host);s.component:RequestRedraw()
+    s.component:SetWidget(s.host);s.component:InitWidget();s.component:UpdateRenderTarget();s.component:RequestRedraw()
     s.token=string.format('%.0f',s.component:get_address());bridge('Source',s.token)
     fault=nil;log('Dedicated 256x256 gun reticle compositor layer; crosshair and hit X share private artwork host; no information-HUD projection.')
 end
@@ -156,10 +157,10 @@ end
 local function update(s,pc,dt)
     s.animation_time=s.animation_time+dt
     local visible=vr.is_runtime_ready() and vr.is_hmd_active() and vr:get_mod_value('VR_2DScreenMode')~='true' and not pc.bShowMouseCursor and not uevr.params.functions.is_drawing_ui()
+    s.ready=vr:get_mod_value('VR_FarFarReticleReady')==s.token
     show_marker(s,visible);bridge('Active',visible and 'true' or 'false')
     s.aim_enabled=visible
     if not visible then bridge('Target','') end
-    s.ready=vr:get_mod_value('VR_FarFarReticleReady')==s.token
     if s.dirty or (visible and s.animation_time>=1/60) then
         sync_images(s);s.component:RequestRedraw();s.animation_time=0;s.dirty=false;s.updates=s.updates+1
     end

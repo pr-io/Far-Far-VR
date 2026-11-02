@@ -21,6 +21,47 @@ internal static class SocialBindings
         data.AsSpan(0,at).CopyTo(result); value.CopyTo(result,at);
         data.AsSpan(at+length).CopyTo(result.AsSpan(at+value.Length)); return result;
     }
+    public static bool IsValidVrInputSave(byte[] data) {
+        if (!data.AsSpan().StartsWith("GVAS"u8) || data.AsSpan().IndexOf(
+            "/Script/FarFarWest.FFWEnhancedInputUserSettings\0"u8)<0) return false;
+        try {
+            byte[] marker=FString("/Script/EnhancedInput.EnhancedPlayerMappableKeyProfile");
+            int at=FindOnce(data,marker);
+            if (at<0) return false;
+            int pos=at+marker.Length;
+            string ReadString() {
+                if (pos+4>data.Length) throw new IOException("Truncated input profile.");
+                int length=BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(pos)); pos+=4;
+                if (length<1 || length>512 || pos+length>data.Length || data[pos+length-1]!=0)
+                    throw new IOException("Unrecognized input profile string.");
+                string value=Encoding.ASCII.GetString(data,pos,length-1); pos+=length;
+                return value;
+            }
+            if (!ReadString().StartsWith("EnhancedPlayerMappableKeyProfile_",StringComparison.Ordinal) ||
+                pos+4>data.Length) return false;
+            int count=BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(pos)); pos+=4;
+            if (count<1 || count>256) return false;
+            bool vrGrenade=false,vrAim=false,desktopBindings=false;
+            for (int i=0;i<count;i++) {
+                string action=ReadString(),key=ReadString();
+                _=ReadString();_=ReadString();
+                if (pos+6>data.Length) return false;
+                pos+=6;
+                if (action=="InputGrenade" && key=="Gamepad_RightStick_Down") vrGrenade=true;
+                if (action=="InputAim" && key=="Gamepad_LeftTrigger") vrAim=true;
+                if ((action=="InputGrenade" && key=="Gamepad_LeftTrigger") ||
+                    (action=="InputAim" && key=="Gamepad_RightStick_Down") ||
+                    (action=="InputDash" && key=="Gamepad_FaceButton_Left") ||
+                    (action=="InputReload" && key=="Gamepad_FaceButton_Right"))
+                    desktopBindings=true;
+            }
+            return ReadString()=="InputUserSettings.Profiles.Default" &&
+                vrGrenade && vrAim && !desktopBindings;
+        }
+        catch (IOException) {
+            return false;
+        }
+    }
     public static byte[] Patch(byte[] original) {
         if (!original.AsSpan().StartsWith("GVAS"u8) || original.AsSpan().IndexOf(
             "/Script/FarFarWest.FFWEnhancedInputUserSettings\0"u8)<0)

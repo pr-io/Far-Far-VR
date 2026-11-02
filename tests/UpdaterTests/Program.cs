@@ -1,4 +1,5 @@
 using FarFarWestVR;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 var releasesJson = """
@@ -10,7 +11,8 @@ var releasesJson = """
 ]
 """;
 using JsonDocument releases = JsonDocument.Parse(releasesJson);
-ReleaseUpdate? update = UpdateService.FindUpdate(releases.RootElement, "0.4.0");
+Check(UpdateService.CurrentVersion == "0.4.1");
+ReleaseUpdate? update = UpdateService.FindUpdate(releases.RootElement, UpdateService.CurrentVersion);
 Check(update is { Tag: "v0.4.2", Version: "v0.4.2", Notes: "Fixes and comfort improvements." });
 Check(update!.AssetName == "FarFarVR-v0.4.2.zip" && update.DownloadUrl.Scheme == Uri.UriSchemeHttps);
 Check(UpdateService.FindUpdate(releases.RootElement, "0.4.2") is null);
@@ -61,6 +63,48 @@ finally
 }
 
 Console.WriteLine("Runtime separation, setup hash verification, and updater checks passed.");
+if (args.Length > 0) UpdateService.ValidatePackage(args[0]);
+
+var packageRoot = Path.Combine(Path.GetTempPath(), "farfarvr-package-test-" + Guid.NewGuid().ToString("N"));
+try
+{
+    Directory.CreateDirectory(Path.Combine(packageRoot, "UE5.8"));
+    Directory.CreateDirectory(Path.Combine(packageRoot, "Profile"));
+    var packageFiles = new Dictionary<string, byte[]>
+    {
+        ["Far Far VR.exe"] = [1, 2, 3],
+        [@"UE5.8\README-RUNTIME.txt"] = [4, 5, 6],
+        [@"Profile\config.txt"] = [7, 8, 9],
+        ["Apply-Update.ps1"] = [10, 11, 12]
+    };
+    foreach (var (relative, content) in packageFiles)
+    {
+        string path = Path.Combine(packageRoot, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, content);
+    }
+    var manifest = new
+    {
+        product = "Far Far VR",
+        version = "0.4.1",
+        files = packageFiles.Select(entry => new
+        {
+            File = entry.Key,
+            SHA256 = Convert.ToHexString(SHA256.HashData(entry.Value))
+        }).ToArray()
+    };
+    File.WriteAllText(Path.Combine(packageRoot, "manifest.json"), JsonSerializer.Serialize(manifest));
+    UpdateService.ValidatePackage(packageRoot);
+
+    File.WriteAllBytes(Path.Combine(packageRoot, "Profile", "config.txt"), [0]);
+    bool rejected = false;
+    try { UpdateService.ValidatePackage(packageRoot); } catch (IOException) { rejected = true; }
+    Check(rejected);
+}
+finally
+{
+    if (Directory.Exists(packageRoot)) Directory.Delete(packageRoot, recursive: true);
+}
 
 void Check(bool condition)
 {

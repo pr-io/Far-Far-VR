@@ -5,6 +5,9 @@ Check(!string.IsNullOrWhiteSpace(SettingsIsolation.GameSavedFolder));
 Check(!string.IsNullOrWhiteSpace(SettingsIsolation.VrSettingsFolder));
 Check(!string.IsNullOrWhiteSpace(SettingsIsolation.DesktopSettingsFolder));
 Check(!string.IsNullOrWhiteSpace(SettingsIsolation.SessionStatePath));
+string repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+Check(SettingsIsolation.IsValidVrInputSave(Path.Combine(repositoryRoot, "Profile", "vr_settings", "EnhancedInputUserSettings.sav")));
+Check(!SettingsIsolation.IsValidVrInputSave(Path.Combine(repositoryRoot, "Profile", "default_pc_settings", "EnhancedInputUserSettings.sav")));
 
 // Test isolation logic with test temporary directories
 string testRoot = Path.Combine(Path.GetTempPath(), "farfarvr-settings-test-" + Guid.NewGuid().ToString("N"));

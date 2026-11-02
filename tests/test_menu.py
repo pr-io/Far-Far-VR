@@ -205,7 +205,7 @@ class MenuTests(unittest.TestCase):
     def test_updates_tab_queues_nonblocking_launcher_commands_and_shows_release_notes(self):
         self.check('''
             events.Updates=true; draw()
-            assert(table.concat(texts,' '):find('Current Version: v0.4.0',1,true))
+            assert(table.concat(texts,' '):find('Current Version: v0.4.1',1,true))
             events['Check for Updates']=true; draw()
             assert(files['farfarvr-update-command.txt']=='check')
             draw()

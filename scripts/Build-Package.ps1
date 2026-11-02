@@ -1,6 +1,6 @@
 param([string]$RuntimeFolder = (Join-Path $PSScriptRoot '..\UE5.8'))
 $ErrorActionPreference = 'Stop'
-$version = '0.4.0'
+$version = '0.4.1'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $runtimeRoot = (Resolve-Path -LiteralPath $RuntimeFolder).Path
 

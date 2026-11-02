@@ -195,8 +195,21 @@ internal static class SettingsIsolation
         lock (Gate)
         {
             if (!IsInVrSession()) return;
+            if (IsGameRunning())
+            {
+                LauncherLog.Write("Far Far West is still running; preserving VR settings until the game exits.");
+                return;
+            }
             ExitVrSessionInternal(saveVrEdits: true);
         }
+    }
+
+    internal static bool IsGameRunning()
+    {
+        var processes = Process.GetProcessesByName("FarFarWest-Win64-Shipping");
+        bool running = processes.Length > 0;
+        foreach (var process in processes) process.Dispose();
+        return running;
     }
 
     private static void ExitVrSessionInternal(bool saveVrEdits)
@@ -343,11 +356,31 @@ internal static class SettingsIsolation
         }
         if (File.Exists(GameInputSavePath))
         {
-            File.Copy(GameInputSavePath, Path.Combine(VrSettingsFolder, "EnhancedInputUserSettings.sav"), true);
+            if (IsValidVrInputSave(GameInputSavePath))
+            {
+                File.Copy(GameInputSavePath, Path.Combine(VrSettingsFolder, "EnhancedInputUserSettings.sav"), true);
+            }
+            else
+            {
+                LauncherLog.Write("Active input save is not recognized as VR bindings; existing VR bindings were preserved.");
+            }
         }
         if (File.Exists(GameUserSavePath))
         {
             File.Copy(GameUserSavePath, Path.Combine(VrSettingsFolder, "userSettings.sav"), true);
+        }
+    }
+
+    internal static bool IsValidVrInputSave(string path)
+    {
+        try
+        {
+            return SocialBindings.IsValidVrInputSave(File.ReadAllBytes(path));
+        }
+        catch (IOException ex)
+        {
+            LauncherLog.Write("Could not validate active VR input save: " + ex.Message);
+            return false;
         }
     }
 

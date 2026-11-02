@@ -212,7 +212,11 @@ internal sealed class LauncherForm : Form
         {
             cancellation.Dispose();
             cancellation = null;
-            if (!closing && sessionProcess==null) { SettingsIsolation.ExitVrSession(); TopMost=false;start.Enabled=true;options.Enabled=true;start.Text="START IN VR";progress.Visible=false; }
+            if (!closing && sessionProcess==null)
+            {
+                if (!SettingsIsolation.IsGameRunning()) SettingsIsolation.ExitVrSession();
+                TopMost=false;start.Enabled=true;options.Enabled=true;start.Text="START IN VR";progress.Visible=false;
+            }
             else if(!closing) PollSession();
         }
     }
@@ -402,8 +406,12 @@ internal static class GameLaunch
                 string log = ReadCurrentLog(VrLog, injected);
                 if (log.Contains("Exception occurred:", StringComparison.Ordinal))
                     throw new InvalidOperationException("The game reported an error during VR startup. Details are in the VR log.");
-                if (log.Contains("Hooked UGameEngine::Tick!", StringComparison.Ordinal) &&
-                    log.Contains("Finished hooking FFakeStereoRendering", StringComparison.Ordinal))
+                bool frameworkReady = log.Contains("Framework initialized", StringComparison.Ordinal);
+                bool graphicsHooked = log.Contains("Hooked DirectX", StringComparison.Ordinal) ||
+                    log.Contains("FFakeStereoRenderingHook", StringComparison.Ordinal);
+                bool runtimeReady = new SessionLink(Setup.ProfileFolder)
+                    .Read(game.Id, DateTimeOffset.UtcNow) is { RuntimeReady: true };
+                if ((frameworkReady && graphicsHooked) || runtimeReady)
                     return game.Id;
                 await Task.Delay(500, token);
             }
