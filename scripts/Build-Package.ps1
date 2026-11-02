@@ -24,6 +24,7 @@ foreach ($name in @('UEVRBackend.dll', 'LuaVR.dll', 'openxr_loader.dll', 'openvr
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Profile') -Destination $packageRoot -Recurse
 foreach ($name in @('README.md', 'THIRD_PARTY.md', 'ROADMAP.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $packageRoot }
+Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $packageRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Launcher\Apply-Update.ps1') -Destination (Join-Path $packageRoot 'Apply-Update.ps1')
 Set-Content -LiteralPath (Join-Path $packageRoot 'version.txt') -Value $version -Encoding ascii
 New-Item -ItemType Directory -Path (Join-Path $packageRoot 'Engine') -Force | Out-Null

@@ -40,7 +40,7 @@ The verified backend SHA-256 is `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D7
 
 ## Build a player package
 
-The package builder verifies the accepted backend hash, builds the launcher, copies the active profile and documentation, and stages a clean standalone package in `dist\FarFarVR`:
+The package builder verifies the accepted backend hash, builds the launcher, copies the active profile and documentation, and stages a complete release package in `dist\FarFarVR`:
 
 ```powershell
 pwsh -File scripts\Build-Package.ps1

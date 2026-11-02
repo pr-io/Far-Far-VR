@@ -1,6 +1,6 @@
 # Far Far VR
 
-Far Far VR is an unofficial VR mod for **Far Far West**. This repository contains the mod launcher, player profile, game-specific Lua modules, OpenXR Touch bindings, engine patches, headers, and build/package scripts. It is designed exclusively for Far Far West and does not require generic UEVR tools or separate configuration.
+Far Far VR is an unofficial **PCVR mod for Far Far West**, distributed with its launcher and injector. It runs with the Windows PC version of the game and a supported PCVR headset; it is not a native standalone-headset app. This repository contains the launcher, player profile, game-specific Lua modules, OpenXR Touch bindings, engine patches, headers, and build/package scripts. It is designed exclusively for Far Far West and does not require generic UEVR tools or separate configuration.
 
 > **Current Backend:** The verified Far Far VR runtime backend has SHA-256 `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558`. The launcher rejects stock or mismatched backends to ensure game-specific cinematic, controls, and comfort fixes are preserved. See [third-party notices](THIRD_PARTY.md).
 
@@ -23,6 +23,8 @@ Far Far VR is an unofficial VR mod for **Far Far West**. This repository contain
 The **Updates** tab asks the launcher to check the private `pr-io/Far-Far-VR` release list in the background. For private release access, save a fine-grained GitHub token limited to this repository with **Contents: read-only** access at `%LOCALAPPDATA%\FarFarWestVRLauncher\github_token.txt`. The launcher never writes the token into the profile or release files. Downloaded packages are staged under `%LOCALAPPDATA%\FarFarWestVRLauncher\pending_update`; the next launcher start applies them only after the launcher and game have exited.
 
 ## Controls & In-Game Features
+
+![Far Far VR controller controls](docs/farfarvr-controls.jpg)
 
 - **VR Menu:** Hold **Start** for 0.5s or press **Insert**. (A quick Start press opens the native game menu).
 - **Map & Ping:** Click the right stick to toggle the map; hold right stick for 0.5s to ping.
@@ -62,7 +64,7 @@ dotnet run --project tests\UpdaterTests\UpdaterTests.csproj
 ```
 
 ### Building the Release Package
-To stage a clean standalone release package in `dist\FarFarVR`:
+To stage a complete release package in `dist\FarFarVR`:
 ```powershell
 pwsh -File scripts\Build-Package.ps1
 ```
