@@ -14,25 +14,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed.' }
 New-Item -ItemType Directory -Path (Join-Path $packageRoot 'UE5.8') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $publishRoot 'FarFarWestVR.exe') -Destination (Join-Path $packageRoot 'Far Far VR.exe')
 
-if (Test-Path -LiteralPath (Join-Path $runtimeRoot 'BUILD-SOURCE.txt')) {
-    Copy-Item -LiteralPath (Join-Path $runtimeRoot 'BUILD-SOURCE.txt') -Destination (Join-Path $packageRoot 'UE5.8')
+foreach ($name in @('UEVRBackend.dll', 'LuaVR.dll', 'openxr_loader.dll', 'openvr_api.dll', 'BUILD-SOURCE.txt')) {
+    $src = Join-Path $runtimeRoot $name
+    if (Test-Path -LiteralPath $src) {
+        Copy-Item -LiteralPath $src -Destination (Join-Path $packageRoot 'UE5.8')
+    }
 }
-
-$runtimeNotice = @"
-Far Far VR Runtime
-------------------
-To respect upstream licensing and copyright boundaries, third-party UEVR runtime
-binaries (UEVRBackend.dll, LuaVR.dll, openxr_loader.dll, openvr_api.dll) are not
-bundled in this distribution archive.
-
-When you run 'Far Far VR.exe' and click 'START IN VR', the launcher will
-automatically download and verify the compatible UEVR runtime package from the
-public repository on first setup.
-
-Far Far VR mod by PR_VR (https://www.youtube.com/@PR_VR).
-Powered by UEVR created by praydog.
-"@
-Set-Content -LiteralPath (Join-Path $packageRoot 'UE5.8\README-RUNTIME.txt') -Value $runtimeNotice -Encoding utf8
 
 $profileSource = Join-Path $projectRoot 'Profile'
 $profileDest = Join-Path $packageRoot 'Profile'
@@ -74,5 +61,5 @@ if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::CreateFromDirectory($packageRoot, $zipPath)
 
-Write-Output "Release package staged without third-party DLLs: $packageRoot"
+Write-Output "Complete release package staged: $packageRoot"
 Write-Output "Clean release zip created: $zipPath"
