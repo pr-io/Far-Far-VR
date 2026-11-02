@@ -1,7 +1,10 @@
 param([string]$ProjectFolder = (Join-Path $PSScriptRoot '..'))
 $ErrorActionPreference = 'Stop'
 $taskRoot = (Resolve-Path -LiteralPath $ProjectFolder).Path
-$taskLauncher = Join-Path $taskRoot 'Far Far West VR.exe'
+$taskLauncher = Join-Path $taskRoot 'Far Far VR.exe'
+if (!(Test-Path -LiteralPath $taskLauncher)) {
+    $taskLauncher = Join-Path $taskRoot 'Far Far West VR.exe'
+}
 if (!(Test-Path -LiteralPath $taskLauncher)) { throw 'Current game launcher is missing.' }
 $taskLink = Join-Path $taskRoot 'UEVR for Far Far West.lnk'
 if (!(Test-Path -LiteralPath $taskLink)) { throw 'Game-specific legacy shortcut not found.' }

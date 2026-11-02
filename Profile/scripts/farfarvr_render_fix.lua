@@ -1,3 +1,5 @@
+-- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
+-- Powered by UEVR created by praydog
 -- Far Far VR Render Fix
 -- Disables broken screen-space refraction, distortion, chromatic aberration,
 -- motion blur, depth-of-field, lens flares, screen-space reflections, film grain,

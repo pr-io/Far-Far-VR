@@ -1,3 +1,5 @@
+-- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
+-- Powered by UEVR created by praydog
 -- Dedicated gun-following compositor layer. Information HUD placement is independent.
 local api,vr=uevr.api,uevr.params.vr
 local state,fault,last_pawn,title_camera,title_location,title_owner

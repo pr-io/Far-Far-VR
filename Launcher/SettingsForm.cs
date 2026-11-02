@@ -79,7 +79,7 @@ internal sealed class SetupForm : Form
         {
             try
             {
-                var candidate=new Setup {GameFolder=game.Text.Trim(),RuntimeFolder=runtime.Text.Trim(),CloseAfterLaunch=false}; candidate.Validate();
+                var candidate=new Setup {GameFolder=game.Text.Trim(),RuntimeFolder=runtime.Text.Trim(),CloseAfterLaunch=false}; candidate.Validate(allowPendingRuntime: true);
                 var changes=readControls.Where(pair=>pair.Value()!=originalControls[pair.Key]).ToDictionary(pair=>pair.Key,pair=>pair.Value());
                 if(changes.Count>0)
                 {

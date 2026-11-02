@@ -1,3 +1,5 @@
+-- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
+-- Powered by UEVR created by praydog
 -- Keep the original objective widgets sharp; project their world anchors using
 -- the HMD and the actual UEVR compositor quad, independently of weapon aiming.
 local api,vr=uevr.api,uevr.params.vr

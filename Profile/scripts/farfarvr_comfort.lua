@@ -1,3 +1,5 @@
+-- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
+-- Powered by UEVR created by praydog
 -- Context-specific comfort, with recovery if UEVR saves during an override.
 local api,vr=uevr.api,uevr.params.vr
 local saved,mode,fault,status_time=nil,'gameplay',nil,0

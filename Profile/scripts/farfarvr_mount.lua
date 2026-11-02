@@ -1,3 +1,5 @@
+-- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
+-- Powered by UEVR created by praydog
 -- Keep flat-game horse orbit/tilt separate from UEVR's tracked head looking.
 local api=uevr.api
 local state,fault,elapsed=nil,nil,0

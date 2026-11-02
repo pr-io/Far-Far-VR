@@ -1,3 +1,5 @@
+-- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
+-- Powered by UEVR created by praydog
 -- Separate event artwork from the distant information HUD. Originals retain
 -- animation/game ownership; only their viewport paint is suppressed after the
 -- native effects-only compositor layer has acknowledged this private renderer.

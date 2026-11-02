@@ -42,7 +42,25 @@ finally
     if (Directory.Exists(statusRoot)) Directory.Delete(statusRoot, recursive: true);
 }
 
-Console.WriteLine("Public/private release authentication, prerelease tag parsing, status output, and no-update checks passed.");
+var tempRuntime = Path.Combine(Path.GetTempPath(), "farfarvr-runtime-test-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var testSetup = new Setup { RuntimeFolder = tempRuntime };
+    Check(!testSetup.IsRuntimeInstalled);
+    Check(Setup.CompatibleBackendHashes.Contains(Setup.CurrentBackendHash));
+    Check(Setup.CompatibleBackendHashes.Contains(Setup.BaseBackendHash));
+    Check(!string.IsNullOrWhiteSpace(Setup.UevrRuntimeDownloadUrl));
+    Check(!string.IsNullOrWhiteSpace(Setup.UevrRuntimeArchiveHash));
+    Check(!string.IsNullOrWhiteSpace(Setup.CompatibleLuaVrHash));
+    Check(!string.IsNullOrWhiteSpace(Setup.CompatibleOpenVrApiHash));
+    Check(!string.IsNullOrWhiteSpace(Setup.CompatibleOpenXrLoaderHash));
+}
+finally
+{
+    if (Directory.Exists(tempRuntime)) Directory.Delete(tempRuntime, true);
+}
+
+Console.WriteLine("Runtime separation, setup hash verification, and updater checks passed.");
 
 void Check(bool condition)
 {

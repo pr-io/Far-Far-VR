@@ -145,7 +145,28 @@ internal sealed class LauncherForm : Form
             Process.Start(new ProcessStartInfo("https://discord.gg/PcsYNa6MS9") { UseShellExecute = true });
         };
 
-        footer.Controls.AddRange([settingsLabel, sep1, yt, sep2, discord]);
+                var sep3 = Theme.Label("•", 0, 0, 0, 0, 9, false, true);
+        sep3.AutoSize = true;
+        sep3.Margin = new Padding(0, 0, 10, 0);
+
+        var uevr = new LinkLabel
+        {
+            Text = "Powered by UEVR created by praydog",
+            Font = new Font("Segoe UI", 9),
+            LinkColor = Theme.Accent,
+            ActiveLinkColor = Theme.Text,
+            LinkBehavior = LinkBehavior.HoverUnderline,
+            AutoSize = true,
+            Margin = new Padding(0),
+            UseMnemonic = false
+        };
+        toolTip.SetToolTip(uevr, "Powered by UEVR created by praydog: https://github.com/praydog/UEVR");
+        uevr.LinkClicked += (_, _) => {
+            LauncherLog.Write("Opening UEVR repository link.");
+            Process.Start(new ProcessStartInfo("https://github.com/praydog/UEVR") { UseShellExecute = true });
+        };
+
+        footer.Controls.AddRange([settingsLabel, sep1, yt, sep2, discord, sep3, uevr]);
         Controls.Add(footer);
         Controls.AddRange([start,options,progress,log]);
         sessionTimer.Tick+=(_,_)=>{PollSession();PollUpdateCommand();};sessionTimer.Start();
@@ -308,6 +329,7 @@ internal static class GameLaunch
 
     public static async Task<int> RunAsync(Setup setup, IProgress<string> status, CancellationToken token, Action<int> onGameFound)
     {
+        await Setup.EnsureRuntimeAsync(setup, status, token);
         setup.Validate();
         Setup.EnsureProfile();
         string GamePath = setup.GamePath;

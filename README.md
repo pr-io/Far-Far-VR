@@ -1,19 +1,23 @@
 # Far Far VR
+**Created and published by PR_VR**
 
-Far Far VR is an unofficial **PCVR mod for Far Far West**, distributed with its launcher and injector. It runs with the Windows PC version of the game and a supported PCVR headset; it is not a native standalone-headset app. This repository contains the launcher, player profile, game-specific Lua modules, OpenXR Touch bindings, engine patches, headers, and build/package scripts. It is designed exclusively for Far Far West and does not require generic UEVR tools or separate configuration.
+Far Far VR is an unofficial **PCVR mod for Far Far West**, created and maintained by **PR_VR**. Powered by UEVR created by praydog. It runs with the Windows PC version of the game and a supported PCVR headset; it is not a native standalone-headset app. 
 
-> **Early access:** Far Far VR is still in active development. Compatibility and comfort can vary by PC, headset, OpenXR runtime, and game update; back up your profile and settings before installing. This is a Windows PCVR mod, not a standalone-headset app.
+This repository contains the launcher, player profile, game-specific Lua modules, OpenXR Touch bindings, engine patches, headers, and package scripts. It is designed exclusively for Far Far West to provide a seamless, console-like PCVR experience.
 
-> **Current Backend:** The verified Far Far VR runtime backend has SHA-256 `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558`. The launcher rejects stock or mismatched backends to ensure game-specific cinematic, controls, and comfort fixes are preserved. See [third-party notices](THIRD_PARTY.md).
+> **Early access:** Far Far VR is in active development. Compatibility and comfort can vary by PC, headset, OpenXR runtime, and game update; back up your profile and settings before installing.
+
+> **Clean Distribution & Runtime Auto-Fetch:** To respect third-party copyright and open-source boundaries, Far Far VR releases do not bundle third-party runtime binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`). On first launch, the Far Far VR launcher automatically downloads and verifies the compatible UEVR runtime package directly from the public repository. See [third-party notices](THIRD_PARTY.md).
 
 ## Player Installation & Launch
 
 Requirements: 64-bit Windows 10/11, Far Far West installed through Steam, a compatible PCVR headset, and an active OpenXR runtime.
 
-1. Extract the Far Far VR package.
-2. Run **Far Far VR.exe**. In **Settings & options**, confirm the detected Steam installation folder for Far Far West.
+1. Extract the Far Far VR release package.
+2. Run **Far Far VR.exe**. In **Settings**, confirm the detected Steam installation folder for Far Far West.
 3. Connect your PCVR headset (OpenXR runtime active).
 4. Click **START IN VR**. Far Far VR automatically:
+   - Downloads and verifies the compatible UEVR runtime if not already present on your system.
    - Sets up or updates the Far Far West profile and Lua modules in `%APPDATA%\UnrealVRMod\FarFarWest-Win64-Shipping`.
    - Launches the game through Steam and waits for the title screen.
    - Injects the verified compatibility backend and confirms stereo/engine hooks.
@@ -26,10 +30,15 @@ Requirements: 64-bit Windows 10/11, Far Far West installed through Steam, a comp
 
 The **Updates** tab checks the `pr-io/Far-Far-VR` GitHub release list in the background. Public releases need no token. While early-access releases remain private, save a fine-grained GitHub token limited to this repository with **Contents: read-only** access at `%LOCALAPPDATA%\FarFarWestVRLauncher\github_token.txt`. The launcher never writes the token into the profile or release files. Downloaded packages are staged under `%LOCALAPPDATA%\FarFarWestVRLauncher\pending_update`; the next launcher start applies them only after the launcher and game have exited.
 
-## Community
+## Credits, Attribution & Disclaimers
 
-- YouTube: [https://www.youtube.com/@PR_VR](https://www.youtube.com/@PR_VR)
-- Discord: [https://discord.gg/PcsYNa6MS9](https://discord.gg/PcsYNa6MS9) (VR Buddies Discord)
+- **Mod Author & Maintainer:** **PR_VR**
+  - YouTube: [https://www.youtube.com/@PR_VR](https://www.youtube.com/@PR_VR)
+  - Community Discord: [https://discord.gg/PcsYNa6MS9](https://discord.gg/PcsYNa6MS9) (VR Buddies Discord)
+- **VR Framework:** Powered by UEVR created by praydog and contributors from the Flatscreen to VR (Flat2VR) community. Immense gratitude to praydog for the groundbreaking universal Unreal Engine VR injector and API.
+- **Game & Third-Party Disclaimers:**
+  - Far Far VR is an unofficial community mod. Far Far VR has no affiliation with, and is not endorsed by or connected to, the developers of Far Far West, Epic Games, or Unreal Engine.
+  - No copyrighted game assets, binaries, audio, textures, or save files are included in this distribution. Players must purchase and install the original game on Steam.
 
 ## Controls & In-Game Features
 
@@ -74,7 +83,7 @@ dotnet run --project tests\UpdaterTests\UpdaterTests.csproj
 ```
 
 ### Building the Release Package
-To stage a complete release package in `dist\FarFarVR`:
+To stage a clean release package in `dist\FarFarVR` (without third-party binaries):
 ```powershell
 pwsh -File scripts\Build-Package.ps1
 ```

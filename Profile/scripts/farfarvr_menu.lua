@@ -1,3 +1,5 @@
+-- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
+-- Powered by UEVR created by praydog
 -- Far Far VR settings UI. Rendering, poses and bindings remain owned by UEVR.
 local startup_ok, startup_error = pcall(function()
 local vr = uevr.params.vr

@@ -1,3 +1,5 @@
+-- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
+-- Powered by UEVR created by praydog
 -- Preserve the established gameplay shortcut filter (melee at 95% up, utility
 -- at 95% down). During active emote playback, disable right-stick action inputs
 -- from reaching Enhanced Input while smoothly rotating camera pitch. Horizontal
