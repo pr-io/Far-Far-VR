@@ -30,7 +30,7 @@ internal sealed class SetupForm : Form
         download.LinkClicked += (_,_) => Process.Start(new ProcessStartInfo("https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch"){UseShellExecute=true});
         pages["Setup"].Controls.Add(download);
         pages["Setup"].Controls.Add(Theme.Label("The launcher stays open. Once VR is ready, Far Far VR settings appear in your headset.",0,245,575,56,10,false,true));
-        pages["Setup"].Controls.Add(Theme.Label("Connect your headset to PCVR before starting.\nOpen VR settings by holding Start for 0.5 seconds or pressing Insert.",0,310,575,80,10,false,true));
+        pages["Setup"].Controls.Add(Theme.Label("Connect your headset to PCVR before starting.\nOpen VR settings by holding Start or pressing Insert.",0,310,575,80,10,false,true));
         string profile=Path.Combine(Setup.ProfileFolder,"config.txt");
         string source=File.Exists(profile)?profile:Path.Combine(AppContext.BaseDirectory,"Profile","config.txt");
         string[] original=File.ReadAllLines(source);

@@ -77,7 +77,9 @@ class MenuTests(unittest.TestCase):
         self.check('assert(panel_name == "Far Far VR"); open=true; frame(); draw(); assert(#writes==0 and saves==0 and recentered==0)')
 
     def test_welcome_shows_hold_help_without_setting_writes(self):
-        self.check("open=true; frame(); draw(); assert(#writes==0); assert(table.concat(texts,' '):find('Hold Start for 0.5 seconds',1,true))")
+        self.check("open=true; frame(); draw(); assert(#writes==0); assert(table.concat(texts,' '):find('Hold Start to show or hide this panel',1,true))")
+        self.check("assert(table.concat(texts,' '):find('Support me by subscribing to my channel',1,true))")
+        self.check("assert(table.concat(texts,' '):find('VR Buddies Discord',1,true))")
 
     def test_display_edits_are_explicit_and_do_not_touch_game_quality(self):
         self.check("events.Display=true; draw(); assert(#writes==0); events['Desktop mirror']=1; draw(); assert(tonumber(values.VR_DesktopSpectatorViewMode)==1 and #writes==1 and saves==0)")

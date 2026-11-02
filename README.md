@@ -14,7 +14,7 @@ Far Far VR is an unofficial **PCVR mod for Far Far West**, distributed with its 
    - Launches the game through Steam and waits for the title screen.
    - Injects the verified compatibility backend and confirms stereo/engine hooks.
 5. In your headset:
-   - Hold **Start** for 0.5s or press **Insert** on keyboard to toggle the Far Far VR menu.
+   - Hold **Start** or press **Insert** on keyboard to toggle the Far Far VR menu.
    - Use **Calibration** to adjust standing/seated height and position.
    - Configure comfort options, HUD layout, and controller preferences live.
 
@@ -26,7 +26,7 @@ The **Updates** tab asks the launcher to check the private `pr-io/Far-Far-VR` re
 
 ![Far Far VR controller controls](docs/farfarvr-controls.jpg)
 
-- **VR Menu:** Hold **Start** for 0.5s or press **Insert**. (A quick Start press opens the native game menu).
+- **VR Menu:** Hold **Start** or press **Insert**. (A quick Start press opens the native game menu).
 - **Map & Ping:** Click the right stick to toggle the map; hold right stick for 0.5s to ping.
 - **Weapons & Voice:** Tap **Y** to switch weapons; hold **Y** for 0.5s to push-to-talk.
 - **Emotes & Battle Cry:** Click both thumbsticks together to open emotes (**A** confirms). Hold both thumbsticks for 0.5s to trigger battle cry without opening the emote wheel.

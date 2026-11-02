@@ -5,7 +5,7 @@ $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (!(Test-Path -LiteralPath (Join-Path $ProfileFolder 'config.txt'))) { throw 'No existing game profile found. Start the launcher once before installing the menu module.' }
 $scriptsFolder = Join-Path $ProfileFolder 'scripts'
 New-Item -ItemType Directory -Path $scriptsFolder -Force | Out-Null
-foreach ($name in @('farfarvr_settings.lua','farfarvr_menu.lua','farfarvr_input.lua','farfarvr_hud.lua','farfarvr_objectives.lua','farfarvr_comfort.lua','farfarvr_mount.lua','farfarvr_effects.lua')) {
+foreach ($name in @('farfarvr_settings.lua','farfarvr_menu.lua','farfarvr_input.lua','farfarvr_hud.lua','farfarvr_objectives.lua','farfarvr_comfort.lua','farfarvr_mount.lua','farfarvr_effects.lua','farfarvr_render_fix.lua')) {
     $target = Join-Path $scriptsFolder $name
     if (Test-Path -LiteralPath $target) { Copy-Item -LiteralPath $target -Destination ($target + '.backup-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffffffZ')) }
     Copy-Item -LiteralPath (Join-Path $projectRoot "Profile\scripts\$name") -Destination $target

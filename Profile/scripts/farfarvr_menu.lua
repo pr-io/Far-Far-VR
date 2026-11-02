@@ -170,7 +170,7 @@ local function draw()
             imgui.text('Your next frontier.')
             imgui.spacing()
             imgui.text(vr.is_runtime_ready() and vr.is_hmd_active() and 'Far Far VR is ready. Return to game whenever you are ready.' or 'Your VR settings are available. Connect your headset to play.')
-            imgui.text('Hold Start for 0.5 seconds to show or hide this panel.')
+            imgui.text('Hold Start to show or hide this panel.')
             imgui.text('Quick Start keeps the normal in-game menu.')
             imgui.spacing();imgui.separator();imgui.spacing()
             imgui.text('MAKE VR FEEL RIGHT')
@@ -271,6 +271,11 @@ local function draw()
             status='Restored settings from when you opened this menu or last saved.'
         end
         imgui.text(status)
+        imgui.spacing()
+        imgui.separator()
+        imgui.spacing()
+        imgui.text('Support me by subscribing to my channel: https://www.youtube.com/@PR_VR')
+        imgui.text('For questions and support for this mod, join the VR Buddies Discord: https://discord.gg/PcsYNa6MS9')
         if show_controls_popup and not popup_closed and vr.is_runtime_ready() and vr.is_hmd_active() and imgui.begin_window and imgui.end_window then
             local p_w, p_h = 920, 560
             if imgui.set_next_window_size then imgui.set_next_window_size({p_w, p_h}, 1) end

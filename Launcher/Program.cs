@@ -65,6 +65,7 @@ internal sealed class LauncherForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
+        SettingsIsolation.EnsureDesktopState();
         Controls.Add(Theme.Label("FAR FAR VR",32,28,500,35,14,true));
         Controls.Add(Theme.Label("Your next frontier.",30,75,690,57,32,true));
         Controls.Add(Theme.Label("Far Far West, through a new lens.",33,137,690,32,12,false,true));
@@ -88,10 +89,67 @@ internal sealed class LauncherForm : Form
         };
         var log=new LinkLabel {Text="View log",Bounds=new Rectangle(601,432,120,30),LinkColor=Theme.Muted,ActiveLinkColor=Theme.Accent};
         log.LinkClicked+=(_,_)=>{LauncherLog.Write("Log opened.");Process.Start(new ProcessStartInfo("notepad.exe"){ArgumentList={LauncherLog.Path},UseShellExecute=false});};
-        Controls.Add(Theme.Label("VR SETTINGS   Hold Start for 0.5 seconds or press Insert",34,492,690,24,9,false,true));
+        var footer = new FlowLayoutPanel
+        {
+            Bounds = new Rectangle(34, 492, 690, 26),
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+        var settingsLabel = Theme.Label("VR SETTINGS   Hold Start or press Insert", 0, 0, 0, 0, 9, false, true);
+        settingsLabel.AutoSize = true;
+        settingsLabel.Margin = new Padding(0, 0, 10, 0);
+
+        var sep1 = Theme.Label("•", 0, 0, 0, 0, 9, false, true);
+        sep1.AutoSize = true;
+        sep1.Margin = new Padding(0, 0, 10, 0);
+
+        var yt = new LinkLabel
+        {
+            Text = "YouTube (@PR_VR)",
+            Font = new Font("Segoe UI", 9),
+            LinkColor = Theme.Accent,
+            ActiveLinkColor = Theme.Text,
+            LinkBehavior = LinkBehavior.HoverUnderline,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 10, 0),
+            UseMnemonic = false
+        };
+        var toolTip = new ToolTip();
+        toolTip.SetToolTip(yt, "Support me by subscribing to my channel: https://www.youtube.com/@PR_VR");
+        yt.LinkClicked += (_, _) => {
+            LauncherLog.Write("Opening YouTube link.");
+            Process.Start(new ProcessStartInfo("https://www.youtube.com/@PR_VR") { UseShellExecute = true });
+        };
+
+        var sep2 = Theme.Label("•", 0, 0, 0, 0, 9, false, true);
+        sep2.AutoSize = true;
+        sep2.Margin = new Padding(0, 0, 10, 0);
+
+        var discord = new LinkLabel
+        {
+            Text = "VR Buddies Discord",
+            Font = new Font("Segoe UI", 9),
+            LinkColor = Theme.Accent,
+            ActiveLinkColor = Theme.Text,
+            LinkBehavior = LinkBehavior.HoverUnderline,
+            AutoSize = true,
+            Margin = new Padding(0),
+            UseMnemonic = false
+        };
+        toolTip.SetToolTip(discord, "For questions and support for this mod, join the VR Buddies Discord: https://discord.gg/PcsYNa6MS9");
+        discord.LinkClicked += (_, _) => {
+            LauncherLog.Write("Opening Discord link.");
+            Process.Start(new ProcessStartInfo("https://discord.gg/PcsYNa6MS9") { UseShellExecute = true });
+        };
+
+        footer.Controls.AddRange([settingsLabel, sep1, yt, sep2, discord]);
+        Controls.Add(footer);
         Controls.AddRange([start,options,progress,log]);
         sessionTimer.Tick+=(_,_)=>{PollSession();PollUpdateCommand();};sessionTimer.Start();
-        FormClosing += (_, _) => { closing = true; cancellation?.Cancel(); sessionTimer.Stop(); };
+        FormClosing += (_, _) => { closing = true; cancellation?.Cancel(); sessionTimer.Stop(); SettingsIsolation.ExitVrSession(); };
         FormClosed += (_,_)=>sessionTimer.Dispose();
     }
 
@@ -106,7 +164,10 @@ internal sealed class LauncherForm : Form
         var updates = new Progress<string>(message => { if (!closing) status.Text = message; LauncherLog.Write(message); });
         try
         {
-            int processId=await Task.Run(() => GameLaunch.RunAsync(setup, updates, token), token);
+            SettingsIsolation.EnterVrSession();
+            int processId=await Task.Run(
+                () => GameLaunch.RunAsync(setup, updates, token, SettingsIsolation.UpdateSessionProcessId),
+                token);
             if (closing) return;
             sessionProcess=processId;handedOff=false;session=null;
             status.Text="Changing to VR mode… Put on your headset. Far Far VR will appear in front of you.";
@@ -130,7 +191,7 @@ internal sealed class LauncherForm : Form
         {
             cancellation.Dispose();
             cancellation = null;
-            if (!closing && sessionProcess==null) { TopMost=false;start.Enabled=true;options.Enabled=true;start.Text="START IN VR";progress.Visible=false; }
+            if (!closing && sessionProcess==null) { SettingsIsolation.ExitVrSession(); TopMost=false;start.Enabled=true;options.Enabled=true;start.Text="START IN VR";progress.Visible=false; }
             else if(!closing) PollSession();
         }
     }
@@ -167,7 +228,7 @@ internal sealed class LauncherForm : Form
             if(!session.MenuVisible)SetMenuVisible(true);
             LauncherLog.Write("Live Far Far VR menu is ready. Launcher remains open; headset menu owns VR input.");
         }
-        status.Text="Far Far VR is ready. Hold Start for 0.5 seconds to show or hide the menu in your headset.";
+        status.Text="Far Far VR is ready. Hold Start to show or hide the menu in your headset.";
         start.Enabled=true;start.Text=session.MenuVisible?"RETURN TO GAME":"SHOW VR MENU";
         options.Enabled=true;options.Text="VR Settings";progress.Visible=false;
     }
@@ -217,6 +278,7 @@ internal sealed class LauncherForm : Form
     }
     private void EndSession()
     {
+        SettingsIsolation.ExitVrSession();
         sessionProcess=null;session=null;handedOff=false;TopMost=false;
         status.Text="Your game has closed. Ready for your next session.";
         start.Enabled=true;start.Text="START IN VR";options.Enabled=true;options.Text="Settings";progress.Visible=false;
@@ -244,13 +306,10 @@ internal static class GameLaunch
     private static readonly string GameLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWest", "Saved", "Logs", "FarFarWest.log");
     private static readonly string VrLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UnrealVRMod", "FarFarWest-Win64-Shipping", "log.txt");
 
-    public static async Task<int> RunAsync(Setup setup, IProgress<string> status, CancellationToken token)
+    public static async Task<int> RunAsync(Setup setup, IProgress<string> status, CancellationToken token, Action<int> onGameFound)
     {
         setup.Validate();
         Setup.EnsureProfile();
-        string inputSave=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "FarFarWest", "Saved", "SaveGames", "EnhancedInputUserSettings.sav");
-        if (SocialBindings.Repair(inputSave)) LauncherLog.Write("Validated social gamepad bindings and added push-to-talk; backup saved.");
         string GamePath = setup.GamePath;
         string BackendPath = setup.BackendPath;
         using var identity = WindowsIdentity.GetCurrent();
@@ -273,6 +332,7 @@ internal static class GameLaunch
             if (game == null) throw new TimeoutException("The game did not start. Open Steam, then try again.");
         }
 
+        onGameFound(game.Id);
         using (game)
         {
             LauncherLog.Write($"Target PID={game.Id}; started={game.StartTime:O}");
