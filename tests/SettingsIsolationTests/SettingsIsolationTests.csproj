@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../Launcher/SettingsIsolation.cs" Link="SettingsIsolation.cs" />
     <Compile Include="../../Launcher/SocialBindings.cs" Link="SocialBindings.cs" />
+    <Compile Include="../../Launcher/Setup.cs" Link="Setup.cs" />
   </ItemGroup>
 </Project>

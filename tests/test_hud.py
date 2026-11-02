@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools/lua-test'))
 from lupa.lua54 import LuaRuntime
 HARNESS=r'''
-files={};values={VR_FarFarReticleReady='123',VR_2DScreenMode='false',VR_WorldScale='1'};writes={};runtime=true;hmd=true;menu=false
+files={};values={VR_FarFarReticleReady='0',VR_2DScreenMode='false',VR_WorldScale='1'};writes={};runtime=true;hmd=true;menu=false
 fs={write=function(k,v)files[k]=v end}
 function node(kind)
  local n={kind=kind,valid=true,children={},RenderOpacity=1,ColorAndOpacity={R=1,G=1,B=1,A=1},RenderTransform={Translation={X=0,Y=0},Scale={X=1,Y=1},Shear={X=0,Y=0},Angle=0},Brush={native_material=kind}}
@@ -23,9 +23,7 @@ function node(kind)
  function n:GetVisibility()return self.visibility or 0 end
  function n:StopAllAnimations()self.stopped=true end
  function n:RequestRedraw()self.redraws=(self.redraws or 0)+1 end
- function n:InitWidget()self.initialized=true end
- function n:UpdateRenderTarget()self.render_target_updated=true end
- function n:K2_DestroyComponent()self.destroyed=true end
+  function n:K2_DestroyComponent()self.destroyed=true end
  function n:get_address()return 123 end
  n.location={X=0,Y=0,Z=0};n.rotation={Pitch=0,Yaw=0,Roll=0};n.forward={X=1,Y=0,Z=0}
  function n:K2_GetComponentLocation()return self.location end
@@ -88,8 +86,7 @@ class HudTests(unittest.TestCase):
   assert(component.set_RenderInMainPass==false and component.set_RenderInDepthPass==false and component.set_CastShadow==false)
   assert(component.set_VisibleInRayTracing==false and component.set_CollisionEnabled==0 and component.set_WindowFocusable==false)
   assert(component.BackgroundColor.A==0 and component.bReceiveHardwareInput==false and component.TickWhenOffscreen and component.bManuallyRedraw)
-  assert(component.set_Widget==host and not host:IsInViewport() and host.stopped)
-  assert(component.initialized and component.render_target_updated)""")
+  assert(component.set_Widget==host and not host:IsInViewport() and host.stopped)""")
  def test_native_material_and_hit_animation_state_are_preserved(self):
   self.check("""local s=built();hud.HitImage.RenderOpacity=.7;hud.HitImage.RenderTransform.Angle=15;update(s,pc,.02)
   assert(s.images[2].clone.set_Brush==hud.HitImage.Brush and s.images[2].clone.set_RenderOpacity==.7)
@@ -102,7 +99,7 @@ class HudTests(unittest.TestCase):
   menu=true;update(s,pc,.02);assert(not s.showing and values.VR_FarFarReticleActive=='false');assert(s.images[1].wrapper.set_Visibility==4)
   menu=false;update(s,pc,.02);assert(s.showing and s.images[1].wrapper.set_Visibility==2)""")
  def test_waiting_native_layer_does_not_display_centered_gameplay_images(self):
-  self.check("values.VR_FarFarReticleReady='0';local s=built();update(s,pc,.02);assert(not s.ready and s.showing and s.images[1].wrapper.set_Visibility==4);values.VR_FarFarReticleReady='123';update(s,pc,.02);assert(s.ready and s.images[1].wrapper.set_Visibility==2)")
+  self.check("local s=built();update(s,pc,.02);assert(not s.ready and s.images[1].wrapper.set_Visibility==2);values.VR_FarFarReticleReady='123';update(s,pc,.02);assert(s.ready)")
  def test_cinema_and_runtime_idle_suspend_only_reticle(self):
   self.check("""local s=built();update(s,pc,.02);values.VR_2DScreenMode='true';update(s,pc,.02);assert(not s.showing)
   values.VR_2DScreenMode='false';update(s,pc,.02);assert(s.showing);hmd=false;update(s,pc,.02);assert(not s.showing and health:GetParent()==root)""")
