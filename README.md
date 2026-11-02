@@ -1,4 +1,7 @@
 # Far Far VR
+
+![Far Far VR launcher](docs/farfarvr-launcher.png)
+
 **Created and published by PR_VR**
 
 Far Far VR is an unofficial **PCVR mod for Far Far West**, created and maintained by **PR_VR**. Powered by UEVR created by praydog. It runs with the Windows PC version of the game and a supported PCVR headset; it is not a native standalone-headset app. 
@@ -26,9 +29,9 @@ Requirements: 64-bit Windows 10/11, Far Far West installed through Steam, a comp
    - Use **Calibration** to adjust standing/seated height and position.
    - Configure comfort options, HUD layout, and controller preferences live.
 
-### In-Menu Updates
+### Built-in Updater
 
-The **Updates** tab checks the `pr-io/Far-Far-VR` GitHub release list in the background. Public releases need no token. While early-access releases remain private, save a fine-grained GitHub token limited to this repository with **Contents: read-only** access at `%LOCALAPPDATA%\FarFarWestVRLauncher\github_token.txt`. The launcher never writes the token into the profile or release files. Downloaded packages are staged under `%LOCALAPPDATA%\FarFarWestVRLauncher\pending_update`; the next launcher start applies them only after the launcher and game have exited.
+Far Far VR includes a built-in updater. Use the **Updates** tab in the in-game menu to check for new releases and stage an available update. The launcher installs staged updates automatically the next time it starts after Far Far West and the launcher have been closed.
 
 ## Credits, Attribution & Disclaimers
 
