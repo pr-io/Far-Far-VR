@@ -50,7 +50,7 @@ The controls image is also available in the Far Far VR menu. Use **Recenter view
 
 ## Updates
 
-Open **Far Far VR menu â†’ Updates â†’ Check for Updates**. If one is available, choose **Download & Prepare Update**. Close the game and launcher, then reopen the launcher to install it.
+Open **Far Far VR menu > Updates > Check for Updates**. If one is available, choose **Download & Prepare Update**. Close the game and launcher, then reopen the launcher to install it.
 
 You can also get the complete package from [Releases](https://github.com/pr-io/Far-Far-VR/releases). Keep a backup before replacing an existing installation. Fully exit VR before starting the flat game so the launcher can restore its desktop settings.
 
