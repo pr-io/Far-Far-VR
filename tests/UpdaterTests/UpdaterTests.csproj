@@ -9,5 +9,6 @@
     <Compile Include="../../Launcher/Updater.cs" Link="Updater.cs" />
     <Compile Include="../../Launcher/Setup.cs" Link="Setup.cs" />
     <Compile Include="../../Launcher/RuntimePatch.cs" Link="RuntimePatch.cs" />
+    <None Include="../../Profile/config.txt" Link="ProfileDefaults.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

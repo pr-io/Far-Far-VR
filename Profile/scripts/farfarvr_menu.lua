@@ -9,7 +9,7 @@ local labels={HUD='Interface', Input='Controls'}
 local page, baseline, was_open, failed = 'Welcome', nil, false, nil
 local show_controls_popup, popup_closed = true, false
 local status = 'Changes apply live. Save to keep them for your next session.'
-local current_version = 'v0.4.3'
+local current_version = 'v0.4.4'
 local update_status, update_version, update_notes = 'Not checked yet.', current_version, ''
 local update_state, update_poll_elapsed = 'idle', 0
 local by_key = {}
@@ -313,7 +313,7 @@ local function draw()
 end
 uevr.lua.add_script_panel('Far Far VR',draw)
 safe(function() snapshot() end)
-print('[FarFarVR] Menu module loaded (0.4.3).')
+print('[FarFarVR] Menu module loaded (0.4.4).')
 end)
 if not startup_ok then
     local message=('[FarFarVR] Menu startup error: '..tostring(startup_error)):gsub('%%','%%%%')

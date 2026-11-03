@@ -148,7 +148,7 @@ internal sealed class Setup
         {
             using (var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
             {
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.3 (PR_VR)");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.4 (PR_VR)");
                 using var response = await httpClient.GetAsync(UevrRuntimeDownloadUrl, HttpCompletionOption.ResponseHeadersRead, token);
                 response.EnsureSuccessStatusCode();
 
@@ -260,7 +260,7 @@ internal sealed class Setup
 
     public static void EnsureProfile()
     {
-        // An existing profile belongs to the player. Never merge or overwrite it implicitly.
+        // Preserve player settings while applying explicit versioned integration repairs.
         if (File.Exists(Path.Combine(ProfileFolder, "config.txt"))) { EnsureMenuModule(); RecoverComfortOverrides(); return; }
         if (Directory.Exists(ProfileFolder) && Directory.EnumerateFileSystemEntries(ProfileFolder).Any())
             throw new IOException("An incomplete VR profile exists. Back it up and resolve it before starting; it was left unchanged.");
@@ -315,11 +315,13 @@ internal sealed class Setup
         }
         var retired = FindRetiredGunAttachments(ProfileFolder)
             .Concat(FindRetiredGunAttachments(Path.Combine(AppContext.BaseDirectory, "Profile"))).ToArray();
-        if (changes.Count == 0 && retired.Length == 0) return;
+        bool migrateAim = !File.Exists(Path.Combine(ProfileFolder, "farfarvr-tracked-aim-defaults-v1.txt"));
+        if (changes.Count == 0 && retired.Length == 0 && !migrateAim) return;
         var running = Process.GetProcessesByName("FarFarWest-Win64-Shipping");
         bool gameRunning = running.Length > 0;
         foreach (var process in running) process.Dispose();
         if (gameRunning) throw new IOException("Close Far Far West so the launcher can install the updated VR modules before starting.");
+        if (migrateAim) MigrateTrackedAimProfile(ProfileFolder);
         foreach (string file in retired)
         {
             string archive = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(file))!, "retired-attachments");
@@ -334,6 +336,34 @@ internal sealed class Setup
             else File.Move(change.Target + ".pending", change.Target);
         }
         LauncherLog.Write("Installed Far Far VR modules; existing profile settings preserved.");
+    }
+
+    // One-time repair of the shipped 0.4.3 integration defaults. Preserve every
+    // user-facing setting, camera offset, graphics choice and control binding.
+    internal static string UpgradeTrackedAimDefaults(string config)
+    {
+        foreach (string key in new[] { "UObjectHook_EnabledAtStartup", "VR_AimModifyPlayerControlRotation", "VR_AimUsePawnControlRotation" })
+        {
+            string pattern = "(?m)^" + Regex.Escape(key) + "=[^\r\n]*";
+            if (Regex.IsMatch(config, pattern)) config = Regex.Replace(config, pattern, key + "=true");
+            else config += (config.EndsWith("\n") ? "" : "\n") + key + "=true\n";
+        }
+        return config;
+    }
+
+    internal static bool MigrateTrackedAimProfile(string profile)
+    {
+        string marker = Path.Combine(profile, "farfarvr-tracked-aim-defaults-v1.txt");
+        if (File.Exists(marker)) return false;
+        string path = Path.Combine(profile, "config.txt");
+        string original = File.ReadAllText(path), upgraded = UpgradeTrackedAimDefaults(original);
+        if (original != upgraded)
+        {
+            File.WriteAllText(path + ".pending", upgraded);
+            File.Replace(path + ".pending", path, path + ".before-tracked-aim-" + DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffffZ"));
+        }
+        File.WriteAllText(marker, "v1\n");
+        return true;
     }
 
     // Retire only byte-equivalent files accidentally imported in 0950d64.

@@ -11,7 +11,7 @@ var releasesJson = """
 ]
 """;
 using JsonDocument releases = JsonDocument.Parse(releasesJson);
-Check(UpdateService.CurrentVersion == "0.4.3");
+Check(UpdateService.CurrentVersion == "0.4.4");
 ReleaseUpdate? update = UpdateService.FindUpdate(releases.RootElement, "0.4.1");
 Check(update is { Tag: "v0.4.2", Version: "v0.4.2", Notes: "Fixes and comfort improvements." });
 Check(update!.AssetName == "FarFarVR-v0.4.2.zip" && update.DownloadUrl.Scheme == Uri.UriSchemeHttps);
@@ -161,6 +161,30 @@ try
     Check(!Setup.FindRetiredGunAttachments(attachmentRoot).Any());
 }
 finally { if (Directory.Exists(attachmentRoot)) Directory.Delete(attachmentRoot, recursive: true); }
+
+var aimRoot = Path.Combine(Path.GetTempPath(), "farfarvr-aim-migration-" + Guid.NewGuid().ToString("N"));
+try
+{
+    Directory.CreateDirectory(aimRoot);
+    string config = "VR_WorldScale=1.25\r\nVR_CameraUpOffset=7\r\nOpenXR_ResolutionScale=0.8\r\nUObjectHook_EnabledAtStartup=false\r\nVR_AimModifyPlayerControlRotation=false\r\nVR_AimUsePawnControlRotation=false\r\nVR_AimMethod=2\r\nUI_Size=2.5\r\n";
+    string path = Path.Combine(aimRoot, "config.txt");
+    File.WriteAllText(path, config);
+    Check(Setup.MigrateTrackedAimProfile(aimRoot));
+    string migrated = File.ReadAllText(path);
+    Check(migrated == config.Replace("=false", "=true"));
+    Check(Directory.GetFiles(aimRoot, "config.txt.before-tracked-aim-*").Length == 1);
+    Check(File.ReadAllText(Directory.GetFiles(aimRoot, "config.txt.before-tracked-aim-*")[0]) == config);
+    Check(!Setup.MigrateTrackedAimProfile(aimRoot));
+    // An intentional later edit is not continually overwritten on future starts.
+    File.WriteAllText(path, config);
+    Check(!Setup.MigrateTrackedAimProfile(aimRoot) && File.ReadAllText(path) == config);
+    string missing = Setup.UpgradeTrackedAimDefaults("VR_CameraUpOffset=7");
+    Check(missing.Contains("UObjectHook_EnabledAtStartup=true") && missing.Contains("VR_AimModifyPlayerControlRotation=true") && missing.Contains("VR_AimUsePawnControlRotation=true"));
+    Check(Setup.UpgradeTrackedAimDefaults(missing) == missing);
+    string shipped = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "ProfileDefaults.txt"));
+    Check(Setup.UpgradeTrackedAimDefaults(shipped) == shipped);
+}
+finally { Directory.Delete(aimRoot, recursive: true); }
 
 void Check(bool condition)
 {

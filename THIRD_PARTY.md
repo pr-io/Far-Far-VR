@@ -5,9 +5,9 @@ Far Far VR is maintained by **PR_VR** ([YouTube](https://www.youtube.com/@PR_VR)
 ## UEVR and runtime patch
 
 - **UEVR:** created by [praydog and contributors](https://github.com/praydog/UEVR).
-- **Upstream compatibility build:** [joeyhodge/UEVR — 102626_FFR_SWGR_Patch](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch).
+- **Upstream compatibility build:** [joeyhodge/UEVR â€” 102626_FFR_SWGR_Patch](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch).
 - **Upstream download:** [uevr.zip](https://github.com/joeyhodge/UEVR/releases/download/102626_FFR_SWGR_Patch/uevr.zip), fetched directly from its publisher by the launcher.
-- **Far Far VR customization delta:** [backend.ffvrdelta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.3/backend.ffvrdelta), applied locally using Windows MSDelta.
+- **Far Far VR customization delta:** [backend.ffvrdelta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.4/backend.ffvrdelta), applied locally using Windows MSDelta.
 - **Maintained source changes:** [engine patch](https://github.com/pr-io/Far-Far-VR/blob/main/Engine/cinema-comfort.patch) and [console compatibility patch](https://github.com/pr-io/Far-Far-VR/blob/main/Engine/farfar-console.patch).
 
 The player ZIP excludes complete `UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll` and `openvr_api.dll` binaries. The installer checks the upstream archive, customization delta, reconstructed engine and companion DLLs before completing setup.

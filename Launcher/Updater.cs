@@ -11,7 +11,7 @@ internal sealed record ReleaseUpdate(string Tag, string Version, string Notes, s
 
 internal sealed class UpdateService
 {
-    internal const string CurrentVersion = "0.4.3";
+    internal const string CurrentVersion = "0.4.4";
     internal const string Repository = "pr-io/Far-Far-VR";
     internal static readonly string LocalRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWestVRLauncher");
@@ -164,7 +164,7 @@ internal sealed class UpdateService
             string notes = release.TryGetProperty("body", out var body) && body.ValueKind == JsonValueKind.String
                 ? body.GetString() ?? ""
                 : "";
-            if (notes.Length > 12000) notes = notes[..12000] + "\n…";
+            if (notes.Length > 12000) notes = notes[..12000] + "\nâ€¦";
             bestVersion = version;
             best = new ReleaseUpdate(tag, "v" + version, notes, expectedAsset, download);
         }

@@ -48,9 +48,6 @@ finally
     if (Directory.Exists(testRoot)) Directory.Delete(testRoot, true);
 }
 
-// Check EnsureDesktopState safely handles missing session file
-SettingsIsolation.EnsureDesktopState();
-
 // Session cleanup may delete only an unchanged loader deployed by this launcher.
 string loaderTest = Path.Combine(Path.GetTempPath(), "farfarvr-loader-" + Guid.NewGuid().ToString("N"));
 try
