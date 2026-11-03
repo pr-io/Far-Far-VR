@@ -1,63 +1,62 @@
-# Build and release
-
-## Build the launcher
-
-On Windows x64 with the .NET 8 SDK:
-
-```powershell
-dotnet publish Launcher\FarFarWestVR.csproj -c Release -r win-x64 -o Launcher\publish
-```
-
-The published launcher is a self-contained Windows x64 executable and includes the .NET runtime, so players do not need to install .NET separately. Copy `Launcher\publish\FarFarWestVR.exe` to `Far Far VR.exe` in the repository root or package folder.
-
-Run the unit test suites:
-
-```powershell
-# C# launcher, settings isolation, and social bindings tests
-dotnet run --project tests\SessionLinkTests\SessionLinkTests.csproj
-dotnet run --project tests\SettingsIsolationTests\SettingsIsolationTests.csproj
-dotnet run --project tests\SocialBindingsTests\SocialBindingsTests.csproj
-dotnet run --project tests\UpdaterTests\UpdaterTests.csproj
-
-# Python / Lua behavior tests
-python -m unittest discover -s tests -v
-```
-
-## Reproduce the compatible engine backend
-
-The native UEVR engine is not vendored directly in Git. The automation scripts clone the pinned UEVR revision into `vendor\UEVR`, verify the revision, and apply `Engine\cinema-comfort.patch` and `Engine\farfar-console.patch`.
-
-Prerequisites:
-- Visual Studio 2022 C++ Build Tools (`C:\BuildTools\VS2022`)
-- Windows SDK, CMake
-- Epic-linked GitHub account for UESDK source access
-
-```powershell
-pwsh -File scripts\Prepare-Engine.ps1
-pwsh -File scripts\Build-Engine.ps1
-pwsh -File scripts\Test-Engine.ps1
-```
-
-The current local-test backend SHA-256 is `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558`. Native engine builds are for local testing; the player archive excludes third-party runtime DLLs.
-
-## Build a player package
-
-The package builder builds the launcher, copies the player profile and documentation, and stages the runtime-separated player archive in `dist\FarFarVR`. It rejects bundled UEVR runtime DLLs:
-
-```powershell
-pwsh -File scripts\Build-Package.ps1
-```
-
-The resulting package contains:
-- `Far Far VR.exe`
-- `UE5.8/README-RUNTIME.txt` (upstream runtime acquisition instructions; no runtime DLLs)
-- `Profile/` (config.txt, cameras.txt, VRSettings.json, Touch bindings, Lua scripts)
-- Player documentation (`README.md`, `ROADMAP.md`, `THIRD_PARTY.md`)
-- `manifest.json` (SHA-256 checksums of all package files)
-
-
-## Local runtime-delivery candidate (0.4.3)
-
-The publisher-only command `python scripts/Build-RuntimePatch.py --base <pinned-upstream-UEVRBackend.dll> --target <tested-custom-UEVRBackend.dll>` creates the local `Runtime/backend.ffvrdelta` artifact. The player installer uses Windows MSDelta; Python and build tools are not player dependencies. The builder pins the delta hash and the installer pins the final tested backend hash. Run `dotnet run --project tests/RuntimeDeliveryTests/RuntimeDeliveryTests.csproj -- <pinned-upstream-zip> Runtime/backend.ffvrdelta` to exercise reconstruction, the real online installer, integrity refusals, cancellation and rollback.
-
-This produces a technically functioning local package, not a verified grant to distribute the engine delta. See [runtime delivery status](Engine/RUNTIME-DELIVERY.md). Do not publish the local candidate as rights-cleared.
+# Developer guide
+
+Players do not need any tools below. Download the complete release ZIP to play.
+
+## Launcher and package
+
+Use Windows x64 and the .NET 8 SDK:
+
+```powershell
+dotnet publish Launcher\FarFarWestVR.csproj -c Release -r win-x64 -o Launcher\publish
+```
+
+The launcher includes its .NET runtime. The release builder also needs the pinned customization delta in the ignored local `Runtime` folder. Obtain the matching [0.4.3 delta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.3/backend.ffvrdelta); its hash is checked by the builder and installer.
+
+```powershell
+pwsh -File scripts\Build-Package.ps1
+```
+
+Output: `dist/FarFarVR-v0.4.3.zip`. It includes the launcher, player profile, delta, updater helper, documentation, images and SHA-256 manifest. Tests, source checkouts, development reports and complete upstream runtime DLLs are excluded.
+
+## Regression checks
+
+Python 3.13 with Lua test support:
+
+```powershell
+python -m pip install --target tools/lua-test lupa
+python -m unittest discover -s tests -v
+```
+
+Launcher/settings/update checks:
+
+```powershell
+dotnet run --project tests\SessionLinkTests\SessionLinkTests.csproj
+dotnet run --project tests\SettingsIsolationTests\SettingsIsolationTests.csproj
+dotnet run --project tests\SocialBindingsTests\SocialBindingsTests.csproj
+dotnet run --project tests\UpdaterTests\UpdaterTests.csproj
+```
+
+Runtime installation, real upstream download and rollback checks require the pinned upstream archive and customization delta:
+
+```powershell
+dotnet run --project tests\RuntimeDeliveryTests\RuntimeDeliveryTests.csproj -- <upstream-zip> Runtime\backend.ffvrdelta
+```
+
+Native product policy checks are provided by `scripts/Test-FarFar*.ps1`. Software checks do not establish headset visual quality, physical control behavior or game performance; test those in representative gameplay before changing an accepted runtime.
+
+## Engine source
+
+Rebuilding the engine is only needed when changing its native customizations. Requirements: Git, Visual Studio 2022 C++ Build Tools, Windows SDK, CMake, and an Epic-linked GitHub account with UESDK access.
+
+```powershell
+git clone --filter=blob:none https://github.com/joeyhodge/UEVR.git vendor/UEVR
+git -C vendor/UEVR checkout 963b157573eaef20528b602d1d9790b8105819b3
+git -C vendor/UEVR submodule update --init --recursive
+pwsh -File scripts\Prepare-Engine.ps1
+pwsh -File scripts\Build-Engine.ps1
+pwsh -File scripts\Test-Engine.ps1
+```
+
+Pinned revisions and runtime hashes are in [Engine/README.md](Engine/README.md). The publisher-only `scripts/Build-RuntimePatch.py` accepts the pinned base engine and tested custom target to generate the Windows delta. A new native build requires its own validation and deliberate hash updates before use; do not silently replace the accepted binary.
+
+See [THIRD_PARTY.md](THIRD_PARTY.md) for upstream attribution and licensing terms.

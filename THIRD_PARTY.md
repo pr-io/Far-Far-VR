@@ -1,56 +1,27 @@
-# Third-Party Notices, Licensing, and Attribution
-
-**Far Far VR** is developed and published by **PR_VR** ([YouTube: @PR_VR](https://www.youtube.com/@PR_VR)).
-
----
-
-## UEVR Framework Attribution & Runtime Separation
-
-- **Original Project:** [praydog/UEVR](https://github.com/praydog/UEVR), created by **praydog** and contributors.
-- **Attribution:** Powered by UEVR created by praydog. We extend sincere credit and gratitude to praydog and the Flatscreen to VR (Flat2VR) modding community for developing this universal VR framework.
-- **Distribution Separation:** **The 0.4.3 release builder excludes third-party runtime binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`)**. Historical release contents require separate inspection.
-- **Auto-Fetch Mechanism:** On first setup, the Far Far VR launcher downloads the verified, compatible public UEVR runtime archive directly from GitHub into the user's local directory:
-  - Compatible public release: [joeyhodge/UEVR `102626_FFR_SWGR_Patch`](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch)
-  - Public archive SHA-256: `FDF325C62BA43BC1DA98ED5F453633FA106CAEF0DF9CB8121566F7AA138F6D55`
-  - Base backend SHA-256: `FEFF6417359F6E36ABAC6577598A86B96D485A023A850F8614043AA0A508C8CB`
-  - Current Far Far VR backend SHA-256: `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558`
-  - Compatible LuaVR.dll SHA-256: `0431946710BD006C221C89863C1D49ADF80F8847817EFCE198D549F5B1B64B0A`
-  - Compatible openvr_api.dll SHA-256: `845D4B947CB5DD2DE2964F6C71536D03366939E4798E574FDD20838D318B540D`
-  - Compatible openxr_loader.dll SHA-256: `3BB4EB190024F92EECF4A0BF33669B5D0B27571DDF4C36A33C58DE199EE536C1`
-  - Pinned UEVR source revision: `963b157573eaef20528b602d1d9790b8105819b3`
-  - Pinned UESDK revision: `811b01498b61e6a0246615b4f2b4fb4f4067fb64`
-
-The pinned public base engine is not equivalent to the customized local backend. The 0.4.3 installer now reconstructs the tested backend locally by applying `Runtime/backend.ffvrdelta` with Windows MSDelta, verifying the archive, source DLL, patch, final engine and companion DLL hashes. Empty-folder first-launch download and failure/rollback checks pass. No complete engine DLL is bundled.
-
-**Customization patch:** [Far Far VR delta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.3/backend.ffvrdelta), SHA-256 `EC35A59458BBD782DC625031D38B333ECA1CBA157DAD4251A1CEFDC36D7B7716`. It is applied to the [original upstream patch release](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch). Maintained source changes are available as [engine](Engine/cinema-comfort.patch) and [console](Engine/farfar-console.patch) patches.
-
-The patch does not convert UEVR to MIT or grant engine redistribution/commercial rights. The API header's separate MIT license only applies to that interface. This project does not claim upstream endorsement or a blanket legal certification.
-
-The pinned upstream engine license says "All rights reserved." See the [actual engine license](https://github.com/joeyhodge/UEVR/blob/963b157573eaef20528b602d1d9790b8105819b3/LICENSE); source visibility and attribution do not themselves establish redistribution rights. The game developer [encourages modding](https://steamcommunity.com/app/3124540/discussions/0/837249163025472585/); that statement is not permission to redistribute third-party engine binaries.
-
-Any source changes maintained by Far Far VR are kept as patches against the pinned revisions (see [Engine/README.md](Engine/README.md)).
-
----
-
-## Original Works by PR_VR
-
-All launcher code, scripts, configurations, documentation, and design assets authored specifically for Far Far VR belong to **PR_VR**:
-
-1. **Launcher & Injector Application (`Far Far VR.exe`):**
-   - Game detection, automatic setup, session isolation, and native thread injection.
-   - Live UEVR session link, auto-fetch runtime installer, and updater.
-2. **Game-Specific Lua Modules (`Profile/scripts/`):**
-   - Independent gun-following compositor layer & weapon reticle (`farfarvr_hud.lua`).
-   - Cinematic letterboxing, camera stabilization, and mount comfort transitions (`farfarvr_comfort.lua`, `farfarvr_mount.lua`).
-   - In-game VR settings UI, calibration, and live updates panel (`farfarvr_menu.lua`, `farfarvr_settings.lua`).
-   - Objective markers, POV damage feedback, and cursor interaction (`farfarvr_objectives.lua`, `farfarvr_effects.lua`).
-   - CVar rendering fixes and temporal stabilization (`farfarvr_render_fix.lua`).
-3. **VR Profile & Input Layout:**
-   - Far Far West customized Touch controller bindings (`Profile/config.txt`, `Profile/_interaction_profiles_oculus_touch_controller.json`).
-
----
-
-## Intellectual Property & Game Disclaimers
-
-- **Far Far West & Developers:** Far Far VR is an unofficial community mod. Far Far VR has no affiliation with, and is not endorsed by or connected to, the developers of Far Far West, Epic Games, or Unreal Engine.
-- **No Copyrighted Game Assets:** No game binaries, game assets, audio, textures, or player-progress saves are included in this distribution. Players must purchase and install the original game on Steam.
+# Third-party notices
+
+Far Far VR is maintained by **PR_VR** ([YouTube](https://www.youtube.com/@PR_VR)). It is an unofficial community mod, with no affiliation with or endorsement by the Far Far West developers, Epic Games, praydog or joeyhodge.
+
+## UEVR and runtime patch
+
+- **UEVR:** created by [praydog and contributors](https://github.com/praydog/UEVR).
+- **Upstream compatibility build:** [joeyhodge/UEVR — 102626_FFR_SWGR_Patch](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch).
+- **Upstream download:** [uevr.zip](https://github.com/joeyhodge/UEVR/releases/download/102626_FFR_SWGR_Patch/uevr.zip), fetched directly from its publisher by the launcher.
+- **Far Far VR customization delta:** [backend.ffvrdelta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.3/backend.ffvrdelta), applied locally using Windows MSDelta.
+- **Maintained source changes:** [engine patch](https://github.com/pr-io/Far-Far-VR/blob/main/Engine/cinema-comfort.patch) and [console compatibility patch](https://github.com/pr-io/Far-Far-VR/blob/main/Engine/farfar-console.patch).
+
+The player ZIP excludes complete `UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll` and `openvr_api.dll` binaries. The installer checks the upstream archive, customization delta, reconstructed engine and companion DLLs before completing setup.
+
+| Verified component | SHA-256 |
+| --- | --- |
+| Upstream archive | `FDF325C62BA43BC1DA98ED5F453633FA106CAEF0DF9CB8121566F7AA138F6D55` |
+| Customization delta | `EC35A59458BBD782DC625031D38B333ECA1CBA157DAD4251A1CEFDC36D7B7716` |
+| Installed backend | `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558` |
+
+The upstream engine [license](https://github.com/joeyhodge/UEVR/blob/963b157573eaef20528b602d1d9790b8105819b3/LICENSE) states "All rights reserved." Upstream retains its rights; attribution, public source access and distributing a delta do not grant additional engine rights or establish endorsement. No blanket legal certification or commercial-use permission is claimed.
+
+## Game and community
+
+Players must own [Far Far West on Steam](https://store.steampowered.com/app/3124540/Far_Far_West/). The mod download contains no game executables, game audio, game textures or player-progress saves. Settings templates are supplied for VR/desktop configuration and controller bindings.
+
+Thanks to the [Flat2VR](https://flat2vr.com/) community. All third-party names and trademarks belong to their respective owners. See [DISCLAIMER.txt](DISCLAIMER.txt) for the warranty disclaimer.

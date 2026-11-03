@@ -56,7 +56,7 @@ Get-ChildItem -LiteralPath $profileSource -File -Recurse |
         Copy-Item -LiteralPath $_.FullName -Destination $destination
     }
 
-foreach ($name in @('README.md', 'THIRD_PARTY.md', 'ROADMAP.md')) {
+foreach ($name in @('README.md', 'THIRD_PARTY.md', 'DISCLAIMER.txt')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $packageRoot
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $packageRoot -Recurse
