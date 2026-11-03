@@ -179,10 +179,10 @@ class MenuTests(unittest.TestCase):
                 drawn_images = drawn_images + 1
             end
 
-            -- First draw when VR is ready should trigger the controls popup
+            -- Startup stays clear until explicitly requested
             draw()
-            assert(#windows >= 1 and windows[#windows] == "Far Far VR - Controls & Bindings")
-            assert(drawn_images >= 1)
+            assert(#windows == 0)
+            assert(drawn_images == 0)
 
             -- Closing the popup via the button
             events["Close Controls Diagram"] = true
@@ -205,7 +205,7 @@ class MenuTests(unittest.TestCase):
     def test_updates_tab_queues_nonblocking_launcher_commands_and_shows_release_notes(self):
         self.check('''
             events.Updates=true; draw()
-            assert(table.concat(texts,' '):find('Current Version: v0.4.4',1,true))
+            assert(table.concat(texts,' '):find('Current Version: v0.4.5',1,true))
             events['Check for Updates']=true; draw()
             assert(files['farfarvr-update-command.txt']=='check')
             draw()

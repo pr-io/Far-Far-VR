@@ -69,6 +69,17 @@ internal sealed class LauncherForm : Form
         Controls.Add(Theme.Label("UNOFFICIAL FAR FAR WEST PCVR MOD",32,28,600,35,11,true,true));
         Controls.Add(Theme.Label("Far Far VR",30,68,690,57,32,true));
         Controls.Add(Theme.Label("Mod by PR_VR  |  Powered by UEVR created by praydog",33,130,690,32,11,false,true));
+        var updatesButton = new Button { Text="Updates", Bounds=new Rectangle(568,28,160,38) };
+        Theme.Button(updatesButton);
+        updatesButton.Click += (_,_) => {
+            using var dialog = new UpdatesForm(updateService, command => {
+                if (updateTask is { IsCompleted: false }) return updateTask;
+                return updateTask = RunUpdateCommandAsync(command);
+            }, () => updateTask is { IsCompleted: false });
+            dialog.ShowDialog(this);
+        };
+        Controls.Add(updatesButton);
+        updatesButton.BringToFront();
         var card = new Panel {Bounds=new Rectangle(32,200,696,178),BackColor=Theme.Surface,Padding=new Padding(24)};
         card.Controls.Add(Theme.Label("PCVR  /  FAR FAR WEST",24,20,640,24,9,true,true));
         card.Controls.Add(Theme.Label("One click to the West.",22,51,640,40,20,true));
@@ -296,32 +307,29 @@ internal sealed class LauncherForm : Form
             return;
         }
 
-        updateTask = Task.Run(async () =>
-        {
-            try
-            {
-                if (command == "check")
-                {
-                    updateService.WriteStatus("checking", "v" + UpdateService.CurrentVersion, "");
-                    ReleaseUpdate? release = await updateService.CheckAsync();
-                    updateService.WriteStatus(release is null ? "up-to-date" : "available",
-                        release?.Version ?? "v" + UpdateService.CurrentVersion,
-                        release?.Notes ?? "You are running the latest published Far Far VR release.");
-                }
-                else
-                {
-                    updateService.WriteStatus("downloading", "v" + UpdateService.CurrentVersion, "Downloading the update package...");
-                    await updateService.StageLatestAsync();
-                }
-            }
-            catch (Exception ex)
-            {
-                LauncherLog.Write("Update request failed: " + ex);
-                try { updateService.WriteStatus("error", "v" + UpdateService.CurrentVersion, ex.Message); }
-                catch (Exception statusError) { LauncherLog.Write("Update status could not be saved: " + statusError.Message); }
-            }
-        });
+        updateTask = RunUpdateCommandAsync(command);
     }
+    private Task RunUpdateCommandAsync(string command) => Task.Run(async () =>
+    {
+        try
+        {
+            updateService.WriteStatus(command == "check" ? "checking" : "downloading", "v" + UpdateService.CurrentVersion, "");
+            if (command == "check")
+            {
+                ReleaseUpdate? release = await updateService.CheckAsync();
+                updateService.WriteStatus(release is null ? "up-to-date" : "available",
+                    release?.Version ?? "v" + UpdateService.CurrentVersion,
+                    release?.Notes ?? "You are running the latest published Far Far VR release.");
+            }
+            else await updateService.StageLatestAsync();
+        }
+        catch (Exception ex)
+        {
+            LauncherLog.Write("Update request failed: " + ex);
+            try { updateService.WriteStatus("error", "v" + UpdateService.CurrentVersion, ex.Message); }
+            catch (Exception statusError) { LauncherLog.Write("Update status could not be saved: " + statusError.Message); }
+        }
+    });
     private void EndSession()
     {
         SettingsIsolation.ExitVrSession();

@@ -11,7 +11,7 @@ internal sealed record ReleaseUpdate(string Tag, string Version, string Notes, s
 
 internal sealed class UpdateService
 {
-    internal const string CurrentVersion = "0.4.5";
+    internal const string CurrentVersion = "0.4.6";
     internal const string Repository = "pr-io/Far-Far-VR";
     internal static readonly string LocalRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWestVRLauncher");

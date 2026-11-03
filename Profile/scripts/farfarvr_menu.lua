@@ -7,7 +7,8 @@ local fields = require('farfarvr_settings')
 local groups = {'Welcome', 'Comfort', 'Calibration', 'Input', 'HUD', 'Display', 'Updates'}
 local labels={HUD='Interface', Input='Controls'}
 local page, baseline, was_open, failed = 'Welcome', nil, false, nil
-local show_controls_popup, popup_closed = true, false
+-- Show the controls diagram only when requested from the Controls tab.
+local show_controls_popup, popup_closed = false, true
 local status = 'Changes apply live. Save to keep them for your next session.'
 local current_version = 'v0.4.5'
 local update_status, update_version, update_notes = 'Not checked yet.', current_version, ''
@@ -156,6 +157,10 @@ uevr.sdk.callbacks.on_frame(function()
     was_open=open
 end)
 local function packed(n) return n>=0x80000000 and n-0x100000000 or n end
+-- Wrap copy inside the available panel instead of clipping at its right edge.
+local function text(value)
+    if imgui.text_wrapped then imgui.text_wrapped(value) else imgui.text(value) end
+end
 local function draw()
     safe(function()
         if not baseline then baseline=snapshot() end
@@ -163,31 +168,31 @@ local function draw()
             if i%3~=1 then imgui.same_line() end
             imgui.push_style_color(21,packed(page==name and 0xFF75BAEE or 0xFF302B25))
             imgui.push_style_color(0,packed(page==name and 0xFF171B20 or 0xFFE9E5DF))
-            if imgui.button(labels[name] or name,{232,38}) then page=name end
+            if imgui.button(labels[name] or name,{160,34}) then page=name end
             imgui.pop_style_color(2)
         end
         imgui.spacing()
-        if failed then imgui.text('Settings unavailable: '..failed); return end
+        if failed then text('Settings unavailable: '..failed); return end
         if page=='Welcome' then
-            imgui.text('Your next frontier.')
+            text('Your next frontier.')
             imgui.spacing()
-            imgui.text(vr.is_runtime_ready() and vr.is_hmd_active() and 'Far Far VR is ready. Return to game whenever you are ready.' or 'Your VR settings are available. Connect your headset to play.')
-            imgui.text('Hold Start to show or hide this panel.')
-            imgui.text('Quick Start keeps the normal in-game menu.')
+            text(vr.is_runtime_ready() and vr.is_hmd_active() and 'Far Far VR is ready. Return to game whenever you are ready.' or 'Your VR settings are available. Connect your headset to play.')
+            text('Hold Start to show or hide this panel.')
+            text('Quick Start keeps the normal in-game menu.')
             imgui.spacing();imgui.separator();imgui.spacing()
-            imgui.text('MAKE VR FEEL RIGHT')
-            imgui.text('Comfort: turning and movement. Calibration: height and scale.')
-            imgui.text('Input: tracked aiming. Interface: HUD and this menu.')
-            imgui.text('Display: frame rate and desktop mirror.')
+            text('MAKE VR FEEL RIGHT')
+            text('Comfort: turning and movement. Calibration: height and scale.')
+            text('Input: tracked aiming. Interface: HUD and this menu.')
+            text('Display: frame rate and desktop mirror.')
             imgui.spacing()
-            imgui.text('YOUR CONTROLS')
-            imgui.text('Right stick click: map. Hold right stick: ping.')
-            imgui.text('Both stick clicks: emote wheel. Hold both: battle cry.')
-            imgui.text('A: confirm an emote. Y: switch weapon. Hold Y: talk.')
-            imgui.text('On cursor screens: point and trigger to select. A stick switches to navigation.')
+            text('YOUR CONTROLS')
+            text('Right stick click: map. Hold right stick: ping.')
+            text('Both stick clicks: emote wheel. Hold both: battle cry.')
+            text('A: confirm an emote. Y: switch weapon. Hold Y: talk.')
+            text('On cursor screens: point and trigger to select. A stick switches to navigation.')
             imgui.spacing()
         elseif page=='Calibration' then
-            imgui.text('Sit or stand naturally and look forward before calibrating.')
+            text('Sit or stand naturally and look forward before calibrating.')
             if imgui.button('Calibrate current height',{230,36}) then calibrate(true) end
             imgui.same_line()
             if imgui.button('Recenter position',{210,36}) then calibrate(false) end
@@ -195,31 +200,30 @@ local function draw()
                 for _,key in ipairs({'VR_CameraUpOffset','VR_CameraForwardOffset','VR_CameraRightOffset'}) do write(by_key[key],0) end
                 status='Manual camera adjustments reset. Controller bindings are preserved.'
             end
-            imgui.text('Height calibration lasts this session. Fine adjustments can be saved.')
+            text('Height calibration lasts this session. Fine adjustments can be saved.')
             imgui.spacing()
         elseif page=='Input' then
-            imgui.text('Your corrected Touch button mapping is preserved.')
-            imgui.same_line()
+            text('Your corrected Touch button mapping is preserved.')
             if imgui.button('Show Controls Popup', {180, 30}) then
                 show_controls_popup = true
                 popup_closed = false
             end
             imgui.spacing()
             if imgui.draw_controls_image then
-                imgui.draw_controls_image(720, 405)
+                imgui.draw_controls_image(480, 270)
                 imgui.spacing()
             end
         elseif page=='Comfort' then
-            imgui.text('Choose how turning and movement feel.')
+            text('Choose how turning and movement feel.')
             imgui.spacing()
         elseif page=='Display' then
-            imgui.text('Adjust VR resolution scale and spectator mirror.')
-            imgui.text('Game quality, antialiasing and headset refresh rate stay in their own settings.')
+            text('Adjust VR resolution scale and spectator mirror.')
+            text('Game quality, antialiasing and headset refresh rate stay in their own settings.')
             imgui.spacing()
         elseif page=='Updates' then
             poll_update_status()
-            imgui.text('Current Version: '..current_version)
-            imgui.text(update_status)
+            text('Current Version: '..current_version)
+            text(update_status)
             imgui.spacing()
             if imgui.button('Check for Updates',{230,36}) then request_update('check') end
             if update_state=='available' then
@@ -227,31 +231,31 @@ local function draw()
                 if imgui.button('Download & Prepare Update',{270,36}) then request_update('stage') end
             end
             imgui.spacing()
-            imgui.text('Release Notes')
+            text('Release Notes')
             if imgui.begin_child and imgui.end_child then
                 local child_ok, child_visible = pcall(imgui.begin_child, 'FarFarVRReleaseNotes', {0, 170}, true)
                 if child_ok then
                     if child_visible ~= false then
                         if imgui.text_wrapped then imgui.text_wrapped(update_notes ~= '' and update_notes or 'Check for updates to view release notes.')
-                        else imgui.text(update_notes ~= '' and update_notes or 'Check for updates to view release notes.') end
+                        else text(update_notes ~= '' and update_notes or 'Check for updates to view release notes.') end
                     end
                     imgui.end_child()
                 else
-                    imgui.text(update_notes ~= '' and update_notes or 'Check for updates to view release notes.')
+                    text(update_notes ~= '' and update_notes or 'Check for updates to view release notes.')
                 end
             else
-                imgui.text(update_notes ~= '' and update_notes or 'Check for updates to view release notes.')
+                text(update_notes ~= '' and update_notes or 'Check for updates to view release notes.')
             end
             imgui.spacing()
         else
-            imgui.text('Place the game interface and settings menu comfortably in VR.')
+            text('Place the game interface and settings menu comfortably in VR.')
             imgui.spacing()
         end
         for _,field in ipairs(fields) do
             if field.group==page then
                 local current=read(field)
                 local changed,value
-                imgui.set_next_item_width(330)
+                imgui.set_next_item_width(220)
                 if field.kind=='bool' then changed,value=imgui.checkbox(field.label,current)
                 elseif field.kind=='choice' then
                     local choices={}; for i,label in ipairs(field.choices) do choices[i-1]=label end
@@ -264,33 +268,32 @@ local function draw()
             end
         end
         imgui.spacing(); imgui.separator(); imgui.spacing()
-        if imgui.button('Recenter view',{180,36}) and headset_ready() then vr.recenter_view(); status='Facing direction reset. Height is unchanged.' end
+        if imgui.button('Recenter view',{160,34}) and headset_ready() then vr.recenter_view(); status='Facing direction reset. Height is unchanged.' end
         imgui.same_line()
-        if imgui.button('Save settings',{180,36}) then vr.save_config(); baseline=snapshot(); status='Save requested through the VR engine.' end
-        imgui.same_line()
-        if imgui.button("Revert this session's edits",{260,36}) then
+        if imgui.button('Save settings',{160,34}) then vr.save_config(); baseline=snapshot(); status='Save requested through the VR engine.' end
+        if imgui.button("Revert this session's edits",{240,34}) then
             for _,field in ipairs(fields) do if read(field)~=baseline[field.key] then write(field,baseline[field.key],true) end end
             status='Restored settings from when you opened this menu or last saved.'
         end
-        imgui.text(status)
+        text(status)
         imgui.spacing()
         imgui.separator()
         imgui.spacing()
-        imgui.text('Support me by subscribing to my channel: https://www.youtube.com/@PR_VR')
-        imgui.text('For questions and support for this mod, join the VR Buddies Discord: https://discord.gg/PcsYNa6MS9')
+        text('Support me by subscribing to my channel: https://www.youtube.com/@PR_VR')
+        text('For questions and support for this mod, join the VR Buddies Discord: https://discord.gg/PcsYNa6MS9')
         if show_controls_popup and not popup_closed and vr.is_runtime_ready() and vr.is_hmd_active() and imgui.begin_window and imgui.end_window then
-            local p_w, p_h = 920, 560
+            local p_w, p_h = 600, 460
             if imgui.set_next_window_size then imgui.set_next_window_size({p_w, p_h}, 1) end
             local keep_open, win_open = imgui.begin_window('Far Far VR - Controls & Bindings', true, 0)
             if win_open and keep_open ~= false then
-                imgui.text('FAR FAR VR CONTROLS & BINDINGS')
+                text('FAR FAR VR CONTROLS & BINDINGS')
                 imgui.same_line()
-                imgui.text('(You can also review this anytime on the Controls tab)')
+                text('(You can also review this anytime on the Controls tab)')
                 imgui.spacing()
                 if imgui.draw_controls_image then
-                    imgui.draw_controls_image(p_w - 30, p_h - 110)
+                    imgui.draw_controls_image(570, 321)
                 else
-                    imgui.text('Controls mapping diagram:')
+                    text('Controls mapping diagram:')
                 end
                 imgui.spacing()
                 imgui.separator()
@@ -300,7 +303,7 @@ local function draw()
                     popup_closed = true
                 end
                 imgui.same_line()
-                imgui.text('Press Trigger or A to close, or click [X] above.')
+                text('Press Trigger or A to close, or click [X] above.')
                 imgui.end_window()
             else
                 show_controls_popup = false
@@ -309,7 +312,7 @@ local function draw()
             end
         end
     end)
-    if failed then imgui.text('VR settings could not be accessed:'); imgui.text(failed) end
+    if failed then text('VR settings could not be accessed:'); text(failed) end
 end
 uevr.lua.add_script_panel('Far Far VR',draw)
 safe(function() snapshot() end)
