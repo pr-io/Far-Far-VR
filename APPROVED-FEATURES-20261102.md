@@ -61,3 +61,7 @@ The user's latest gameplay log contains 1,487 DLSS "Another plugin already set F
 ## Latest wearer acceptance
 
 User: "i tested and the crosshair worked. and performance seemed better. push updates to github, then we'll delete everything locally and test fresh install". This authorizes the source push. It does not establish fresh-install functionality or authorize shipping an unverified replacement runtime.
+
+## Fresh-install repair design
+
+See [Engine/RUNTIME-DELIVERY.md](Engine/RUNTIME-DELIVERY.md) for the exact matching-upstream and independent-plugin routes, dependencies and release gates. Neither route is represented as completed. The tested local runtime is preserved.
