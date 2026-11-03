@@ -8,9 +8,9 @@ Status: automatic reconstruction is now implemented and locally tested in 0.4.3.
 
 29 runtime-delivery checks include the real `Setup.EnsureRuntimeAsync` network path into an empty folder. The result exactly matches the tested 2F30 backend. 104 profile checks and launcher checks pass; this does not replace wearer testing of a real extracted release.
 
-The publisher-only generator is `scripts/Build-RuntimePatch.py`; it accepts only the pinned source and wearer-tested target. `Runtime/` is already ignored as a local artifact directory. No delta or new release asset has been pushed. The package builder includes the local delta and verifies its pinned SHA-256; this is a local candidate, not a rights-cleared public release.
+The publisher-only generator is `scripts/Build-RuntimePatch.py`; it accepts only the pinned source and wearer-tested target. `Runtime/` is already ignored as a local artifact directory. The user authorized publishing the automatic-patch release with explicit upstream attribution and patch links. This decision is not recorded as a verified upstream license grant. The package builder includes the local delta and verifies its pinned SHA-256; this is a local candidate, not a rights-cleared public release.
 
-**A binary delta is not a copyright/license workaround.** The technical gap is resolved in the local installer, but the delta may contain modified engine code. Do not publish it under the claim that omitting complete DLLs proves distribution permission. The independent-plugin and authorized-upstream routes below remain alternatives for resolving that issue.
+**A binary delta is not a copyright/license workaround.** The technical gap is resolved in the local installer, but the delta may contain modified engine code. Omitting complete DLLs is not asserted to prove distribution permission. The independent-plugin and authorized-upstream routes below remain alternatives for resolving that issue.
 
 ## Why the current download cannot reproduce the test
 

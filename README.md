@@ -17,9 +17,21 @@ This repository contains the launcher, player profile, game-specific Lua modules
 
 > **Early access:** Far Far VR is in active development. Compatibility and comfort can vary by PC, headset, OpenXR runtime, and game update; back up your profile and settings before installing.
 
-> **Clean Distribution & Runtime Auto-Fetch:** To respect third-party copyright and open-source boundaries, Far Far VR releases do not bundle third-party runtime binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`). On first launch, the launcher downloads and verifies the upstream runtime, applies the bundled Far Far VR customization delta locally using Windows, and verifies the resulting engine matches the exact tested build. No compiler, developer tools or manual runtime copying is required. This describes the locally tested 0.4.3 candidate; patch distribution rights are still under review. See [third-party notices](THIRD_PARTY.md).
+> **Clean Distribution & Runtime Auto-Fetch:** To respect third-party copyright and open-source boundaries, Far Far VR releases do not bundle third-party runtime binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`). On first launch, the launcher downloads and verifies the upstream runtime, applies the bundled Far Far VR customization delta locally using Windows, and verifies the resulting engine matches the exact tested build. No compiler, developer tools or manual runtime copying is required. The installer verifies both the upstream archive and the exact resulting customized engine. See [third-party notices](THIRD_PARTY.md).
 
-> **0.4.3 candidate status:** The local crosshair/performance recovery is wearer-tested. Automatic first-launch runtime reconstruction has passed an empty-folder download test and setup failure/rollback checks. The runtime delta's distribution rights remain unverified, so no public 0.4.3 release asset has been published. A functioning installer is not a license exemption.
+> **0.4.3:** The local crosshair/performance recovery is wearer-tested. Automatic first-launch installation passed an empty-folder download test and setup failure/rollback checks. A fresh download and wearer test of this published package is the next validation step.
+
+## Runtime patch, sources and attribution
+
+Far Far VR uses the public [joeyhodge/UEVR **102626_FFR_SWGR_Patch** release](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch), based on **UEVR by praydog**. The launcher downloads [the upstream archive directly from its publisher](https://github.com/joeyhodge/UEVR/releases/download/102626_FFR_SWGR_Patch/uevr.zip).
+
+The download includes PR_VR's [Far Far VR customization patch](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.3/backend.ffvrdelta), which Windows applies locally to reproduce the tested engine. [Maintained engine source changes](Engine/cinema-comfort.patch), the [console compatibility source patch](Engine/farfar-console.patch), and [installer source](Launcher/RuntimePatch.cs) are available in this repository. Complete UEVR runtime DLLs are excluded from the Far Far VR ZIP.
+
+- Upstream archive SHA-256: `FDF325C62BA43BC1DA98ED5F453633FA106CAEF0DF9CB8121566F7AA138F6D55`
+- Customization patch SHA-256: `EC35A59458BBD782DC625031D38B333ECA1CBA157DAD4251A1CEFDC36D7B7716`
+- Installed engine SHA-256: `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558`
+
+Upstream retains its rights under its [engine license](https://github.com/joeyhodge/UEVR/blob/963b157573eaef20528b602d1d9790b8105819b3/LICENSE). Source links and attribution do not grant additional rights or imply endorsement. See [third-party notices](THIRD_PARTY.md).
 
 ## Player Installation & Launch
 

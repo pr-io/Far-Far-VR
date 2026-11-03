@@ -69,3 +69,7 @@ See [Engine/RUNTIME-DELIVERY.md](Engine/RUNTIME-DELIVERY.md) for the exact match
 ## 0.4.3 automatic setup implementation
 
 The technical runtime acquisition gap is now repaired locally with exact Windows MSDelta reconstruction of the tested 2F30 backend, not a gameplay rewrite or reduced-feature fallback. 29 runtime setup checks pass, including a real upstream network download into an empty folder, failure preservation, cancellation and retry. The existing Live copy remains unchanged. The local player ZIP includes the 1.5 MB delta and no complete runtime DLLs. Public distribution of that delta has not been license-cleared; no binary patch or 0.4.3 release asset has been pushed. See Engine/RUNTIME-DELIVERY.md.
+
+## Publication authorization
+
+After discussing unresolved binary-patch rights, the user explicitly accepted proceeding and requested upstream patch references and direct patch links on the GitHub page. Publish the verified 0.4.3 package and its delta with attribution, hashes and source links, without claiming a legal certification. No engine rewrite or gameplay change is included. Fresh-install and live-update wearer tests remain pending.
