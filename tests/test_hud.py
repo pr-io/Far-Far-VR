@@ -56,7 +56,7 @@ StructObject={new=function(...)assert(select('#',...)==1);return {native=true,st
 UEVR_UObjectHook={exists=function(o)return o and o.valid~=false end,activate=function()end,
  remove_motion_controller_state=function(o)o.untracked=true end,
  get_or_add_motion_controller_state=function(o)return {set_hand=function(_,v)o.hand=v end,set_permanent=function()end}end}
-uevr={api=api,params={vr={recentered=0,recenter_view=function()recentered_count=(recentered_count or 0)+1 end,is_runtime_ready=function()return runtime end,is_hmd_active=function()return hmd end,
+uevr={api=api,params={vr={is_runtime_ready=function()return runtime end,is_hmd_active=function()return hmd end,
  get_mod_value=function(_,k)assert(not k:find('UI_',1,true),'Information HUD settings must not be read');return values[k]end,
  set_mod_value=function(k,v)assert(k:find('VR_FarFarReticle',1,true)==1);values[k]=v;table.insert(writes,{k,v})end},functions={log_info=function()end,log_error=function()end,is_drawing_ui=function()return menu end}},
  sdk={callbacks={on_post_engine_tick=function(f)tick=f end,on_pre_calculate_stereo_view_offset=function(f)view_tick=f end,on_script_reset=function(f)reset=f end}}}
@@ -198,19 +198,28 @@ class HudTests(unittest.TestCase):
   local x,y,z=values.VR_FarFarReticleTarget:match('([^ ]+) ([^ ]+) ([^ ]+)')
   assert(math.abs(tonumber(x)-.5)<1e-6 and math.abs(tonumber(y)-.2)<1e-6 and math.abs(tonumber(z)+2.85)<1e-6)
   assert(s.aim_source=='tracked right hand')""")
- def test_lobby_pawn_uses_tracked_right_hand(self):
-   self.check("""local s=built();update(s,pc,.02)
-   function pawn:get_full_name()return 'BP_Player_Lobby_C /Game/Levels/L_Lobby.PersistentLevel.BP_Player_Lobby_C_1' end
-   pawn.AC_PlayerItems={equipedItem={valid=true,canBeReloaded=false,isDrawn=true,get_class=function()return {find_property=function(_,k)if k=='isDrawn' then return {} end end}end}}
-   pc.PlayerCameraManager=node('firing camera');pc.PlayerCameraManager.location={X=20,Y=10,Z=30}
-   s.hand.location={X=10,Y=50,Z=20};view_tick()
-   local x,y,z=values.VR_FarFarReticleTarget:match('([^ ]+) ([^ ]+) ([^ ]+)')
-   assert(math.abs(tonumber(x)-.5)<1e-6 and math.abs(tonumber(y)-.2)<1e-6 and math.abs(tonumber(z)+2.85)<1e-6)
-   assert(s.aim_source=='tracked right hand')""")
- def test_lobby_pawn_spawn_recenters_view(self):
-   self.check("""recentered_count=0
-   local lobby_pawn=node('lobby_pawn');function lobby_pawn:get_full_name()return 'BP_Player_Lobby_C /Game/Levels/L_Lobby' end
-   function lobby_pawn:AddComponentByClass(cls)return pawn:AddComponentByClass(cls) end
-   pc.Pawn=lobby_pawn;tick(nil,0.1)
-   assert(recentered_count==1)""")
+ def test_equipped_nonempty_weapon_without_is_drawn_uses_firing_camera(self):
+  self.check("""local s=built();update(s,pc,.02)
+  pawn.AC_PlayerItems={equipedItem={valid=true,canBeReloaded=false,get_full_name=function()return 'BP_Item_Minigun_C Test'end,get_class=function()return {find_property=function()return nil end}end}}
+  pc.PlayerCameraManager=node('firing camera');pc.PlayerCameraManager.location={X=20,Y=10,Z=30}
+  s.hand.location={X=900,Y=800,Z=700};view_tick()
+  assert(s.aim_source=='game firing camera')
+  local x,y,z=values.VR_FarFarReticleTarget:match('([^ ]+) ([^ ]+) ([^ ]+)')
+  assert(math.abs(tonumber(x)-.1)<1e-6 and math.abs(tonumber(y)-.3)<1e-6 and math.abs(tonumber(z)+2.95)<1e-6)""")
+ def test_lobby_drawn_weapon_retains_accepted_firing_camera_behavior(self):
+  self.check("""local s=built();update(s,pc,.02)
+  function pawn:get_full_name()return 'BP_Player_Lobby_C Test'end
+  pawn.AC_PlayerItems={equipedItem={valid=true,isDrawn=true,get_class=function()return {find_property=function()return {}end}end}}
+  pc.PlayerCameraManager=node('firing camera');view_tick()
+  assert(s.aim_source=='game firing camera')""")
+
+ def test_lobby_spawn_recenters_once_per_possession_without_touching_height(self):
+  self.check("""local count=0;uevr.params.vr.recenter_view=function()count=count+1 end
+  function pawn:get_full_name()return 'BP_Player_Lobby_C Test'end
+  tick(nil,.02);assert(count==1)
+  for i=1,120 do tick(nil,.02)end;assert(count==1)
+  pc.Pawn=nil;tick(nil,.02);pc.Pawn=pawn;tick(nil,.02);assert(count==2)
+  function pawn:get_full_name()return 'BP_Player_C Mission'end
+  pc.Pawn=nil;tick(nil,.02);pc.Pawn=pawn;tick(nil,.02);assert(count==2)""")
+
 if __name__=='__main__':unittest.main()

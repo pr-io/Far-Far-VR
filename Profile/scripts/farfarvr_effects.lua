@@ -4,7 +4,7 @@
 -- animation/game ownership; only their viewport paint is suppressed after the
 -- native effects-only compositor layer has acknowledged this private renderer.
 local api,vr=uevr.api,uevr.params.vr
-local state,retry,scan_elapsed,status_elapsed=nil,0,0,0
+local state,retry,scan_elapsed=nil,0,0
 local obj_cache = {}
 local function find(path)
     local object = obj_cache[path]
@@ -247,8 +247,7 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
         if not state then build(pawn,pc) end;if not state then return end
         scan_elapsed=scan_elapsed+dt;if scan_elapsed>=(#state.items>=6 and 1.0 or 0.5) then scan_elapsed=0;scan(state) end
         sync(state,dt)
-        status_elapsed=status_elapsed+dt
-        if status_elapsed>=3 then status_elapsed=0;fs.write('farfarvr-effects-status.txt','Effects-only POV layer; sources '..#state.items..'\nNative acknowledged '..tostring(state.ready)..'\nActive '..tostring(state.active)..'\nHUD/crosshair/control modules unchanged') end
+
     end)
     if not ok then cleanup();retry=1;uevr.params.functions.log_error('[Far Far VR Effects] '..tostring(err));fs.write('farfarvr-effects-status.txt','ERROR; original effects restored: '..tostring(err)) end
 end)

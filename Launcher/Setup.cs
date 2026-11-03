@@ -20,7 +20,6 @@ internal sealed class Setup
     internal static readonly string[] CompatibleBackendHashes = new[]
     {
         CurrentBackendHash,
-        BaseBackendHash,
         "0CFB68B928FFA5F5516BA866AFB676EB716F99A72B05B736CC5FB3053DA94029",
         "179BB4A6F61574AC16621E2C7C9E2E27F3AA328462243417D177527647315558"
     };
@@ -122,7 +121,7 @@ internal sealed class Setup
         bool accepted = CompatibleBackendHashes.Contains(backendHash);
         bool menuPreview = UsePreviewPreferences && backendHash == "DCDFF1DAB571EF183DE7D5697A60F450A8D50308F0E67B15785382919261B019";
         if (!accepted && !menuPreview)
-            throw new IOException("This VR runtime does not contain the current Far Far West fixes. Use the UE5.8 folder from the current Far Far VR package.");
+            throw new IOException("This VR runtime is missing the required Far Far VR customizations. The public upstream base engine cannot replace the customized runtime.");
 
         using var lua = File.OpenRead(Path.Combine(RuntimeFolder, "LuaVR.dll"));
         if (Convert.ToHexString(SHA256.HashData(lua)) != CompatibleLuaVrHash)
@@ -319,15 +318,6 @@ internal sealed class Setup
                 if (!File.Exists(targetTex) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(targetTex))) changes.Add((source,targetTex));
             }
         }
-        string uobDir = Path.Combine(AppContext.BaseDirectory, "Profile", "uobjecthook");
-        if (Directory.Exists(uobDir))
-        {
-            foreach (string file in Directory.EnumerateFiles(uobDir, "*.json"))
-            {
-                string target = Path.Combine(ProfileFolder, "uobjecthook", Path.GetFileName(file));
-                if (!File.Exists(target) || !File.ReadAllBytes(file).SequenceEqual(File.ReadAllBytes(target))) changes.Add((file, target));
-            }
-        }
         string profileDir = Path.Combine(AppContext.BaseDirectory, "Profile");
         if (Directory.Exists(profileDir))
         {
@@ -341,11 +331,19 @@ internal sealed class Setup
                 }
             }
         }
-        if (changes.Count == 0) return;
+        var retired = FindRetiredGunAttachments(ProfileFolder)
+            .Concat(FindRetiredGunAttachments(Path.Combine(AppContext.BaseDirectory, "Profile"))).ToArray();
+        if (changes.Count == 0 && retired.Length == 0) return;
         var running = Process.GetProcessesByName("FarFarWest-Win64-Shipping");
         bool gameRunning = running.Length > 0;
         foreach (var process in running) process.Dispose();
         if (gameRunning) throw new IOException("Close Far Far West so the launcher can install the updated VR modules before starting.");
+        foreach (string file in retired)
+        {
+            string archive = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(file))!, "retired-attachments");
+            Directory.CreateDirectory(archive);
+            File.Move(file, Path.Combine(archive, Path.GetFileName(file) + "." + Guid.NewGuid().ToString("N") + ".backup"));
+        }
         foreach (var change in changes)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(change.Target)!);
@@ -354,6 +352,26 @@ internal sealed class Setup
             else File.Move(change.Target + ".pending", change.Target);
         }
         LauncherLog.Write("Installed Far Far VR modules; existing profile settings preserved.");
+    }
+
+    // Retire only byte-equivalent files accidentally imported in 0950d64.
+    // Keep unknown/user-edited attachments and archive matching originals for recovery.
+    internal static IEnumerable<string> FindRetiredGunAttachments(string profileRoot)
+    {
+        var known = new Dictionary<string, string> {
+            ["10047652364120066497_props.json"] = "4C66B576B707B5A4D5F80E04BEBFC884C6C91E66016ACBAB03A477034D20830D",
+            ["1402486413757807057_mc_state.json"] = "C9E667896EC2E7FBC58F528BC87174F052649828DBD79CA7C67B0E66B7F6829E",
+            ["1402486413757807057_props.json"] = "C6F386D0912AB9800F15EEDB513F5C851AE34FCAFC50CA8CFB0B60E8783CD3DF",
+            ["15326212463869931285_props.json"] = "F834439355E5254B259409BB9529534853AF95FA084CAC18C42ADA3B3A0C1122"
+        };
+        foreach (var entry in known)
+        {
+            string path = Path.Combine(profileRoot, "uobjecthook", entry.Key);
+            if (!File.Exists(path)) continue;
+            string normalized = File.ReadAllText(path).Replace("\r\n", "\n");
+            string hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(normalized)));
+            if (hash == entry.Value) yield return path;
+        }
     }
 
     private static void RecoverComfortOverrides()

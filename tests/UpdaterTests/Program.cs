@@ -11,8 +11,8 @@ var releasesJson = """
 ]
 """;
 using JsonDocument releases = JsonDocument.Parse(releasesJson);
-Check(UpdateService.CurrentVersion == "0.4.1");
-ReleaseUpdate? update = UpdateService.FindUpdate(releases.RootElement, UpdateService.CurrentVersion);
+Check(UpdateService.CurrentVersion == "0.4.2");
+ReleaseUpdate? update = UpdateService.FindUpdate(releases.RootElement, "0.4.1");
 Check(update is { Tag: "v0.4.2", Version: "v0.4.2", Notes: "Fixes and comfort improvements." });
 Check(update!.AssetName == "FarFarVR-v0.4.2.zip" && update.DownloadUrl.Scheme == Uri.UriSchemeHttps);
 Check(UpdateService.FindUpdate(releases.RootElement, "0.4.2") is null);
@@ -50,7 +50,7 @@ try
     var testSetup = new Setup { RuntimeFolder = tempRuntime };
     Check(!testSetup.IsRuntimeInstalled);
     Check(Setup.CompatibleBackendHashes.Contains(Setup.CurrentBackendHash));
-    Check(Setup.CompatibleBackendHashes.Contains(Setup.BaseBackendHash));
+    Check(!Setup.CompatibleBackendHashes.Contains(Setup.BaseBackendHash));
     Check(!string.IsNullOrWhiteSpace(Setup.UevrRuntimeDownloadUrl));
     Check(!string.IsNullOrWhiteSpace(Setup.UevrRuntimeArchiveHash));
     Check(!string.IsNullOrWhiteSpace(Setup.CompatibleLuaVrHash));
@@ -96,6 +96,20 @@ try
     File.WriteAllText(Path.Combine(packageRoot, "manifest.json"), JsonSerializer.Serialize(manifest));
     UpdateService.ValidatePackage(packageRoot);
 
+    string forbiddenRuntime = Path.Combine(packageRoot, @"UE5.8\UEVRBackend.dll");
+    File.WriteAllBytes(forbiddenRuntime, [1,2,3]);
+    bool runtimeRejected = false;
+    try { UpdateService.ValidatePackage(packageRoot); } catch (IOException) { runtimeRejected = true; }
+    Check(runtimeRejected);
+    File.Delete(forbiddenRuntime);
+
+    string uncovered = Path.Combine(packageRoot, "unexpected.ps1");
+    File.WriteAllText(uncovered, "unexpected");
+    bool uncoveredRejected = false;
+    try { UpdateService.ValidatePackage(packageRoot); } catch (IOException) { uncoveredRejected = true; }
+    Check(uncoveredRejected);
+    File.Delete(uncovered);
+
     File.WriteAllBytes(Path.Combine(packageRoot, "Profile", "config.txt"), [0]);
     bool rejected = false;
     try { UpdateService.ValidatePackage(packageRoot); } catch (IOException) { rejected = true; }
@@ -105,6 +119,47 @@ finally
 {
     if (Directory.Exists(packageRoot)) Directory.Delete(packageRoot, recursive: true);
 }
+
+var attachmentRoot = Path.Combine(Path.GetTempPath(), "farfarvr-attachment-test-" + Guid.NewGuid().ToString("N"));
+try
+{
+    Directory.CreateDirectory(Path.Combine(attachmentRoot, "uobjecthook"));
+    string oldFile = Path.Combine(attachmentRoot, "uobjecthook", "10047652364120066497_props.json");
+    File.WriteAllText(oldFile, """
+{
+    "hide": false,
+    "hide_legacy": false,
+    "path": [
+        "Acknowledged Pawn",
+        "Properties",
+        "Socket_Item",
+        "Properties",
+        "RelativeScale3D"
+    ],
+    "properties": [
+        {
+            "data": 4603039107336110080,
+            "name": "Z"
+        },
+        {
+            "data": 4603039107336110080,
+            "name": "Y"
+        },
+        {
+            "data": 4603039107336110080,
+            "name": "X"
+        }
+    ],
+    "type": "properties"
+}
+""");
+    Check(Setup.FindRetiredGunAttachments(attachmentRoot).Single() == oldFile);
+    File.AppendAllText(oldFile, " ");
+    Check(!Setup.FindRetiredGunAttachments(attachmentRoot).Any());
+    File.WriteAllText(Path.Combine(attachmentRoot, "uobjecthook", "user.json"), "{}");
+    Check(!Setup.FindRetiredGunAttachments(attachmentRoot).Any());
+}
+finally { if (Directory.Exists(attachmentRoot)) Directory.Delete(attachmentRoot, recursive: true); }
 
 void Check(bool condition)
 {

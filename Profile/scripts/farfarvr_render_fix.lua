@@ -7,13 +7,9 @@
 local api = uevr.api
 local vr = uevr.params.vr
 
-local history = {}
+local waiting_reported = false
 
 local function log_status(msg)
-    table.insert(history, msg)
-    if fs and fs.write then
-        fs.write('farfarvr-render-fix-status.txt', table.concat(history, '\n'))
-    end
     print('[Far Far VR Render Fix] ' .. msg)
 end
 
@@ -40,7 +36,7 @@ local initialized = false
 local function apply_fixes()
     local manager = api:get_console_manager()
     if not manager then
-        if not initialized then log_status('Waiting for console manager...') end
+        if not waiting_reported then log_status('Waiting for console manager...'); waiting_reported = true end
         return false
     end
 
@@ -77,7 +73,7 @@ apply_fixes()
 if uevr and uevr.sdk and uevr.sdk.callbacks and uevr.sdk.callbacks.on_post_engine_tick then
     uevr.sdk.callbacks.on_post_engine_tick(function(_, dt)
         check_elapsed = check_elapsed + (dt or 0.016)
-        if check_elapsed >= 3.0 or not initialized then
+        if check_elapsed >= 3.0 then
             check_elapsed = 0
             apply_fixes()
         end

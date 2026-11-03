@@ -1,8 +1,8 @@
 param([string]$RuntimeFolder = (Join-Path $PSScriptRoot '..\UE5.8'))
 $ErrorActionPreference = 'Stop'
-$version = '0.4.1'
+$version = '0.4.2'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$runtimeRoot = (Resolve-Path -LiteralPath $RuntimeFolder).Path
+$runtimeRoot = [IO.Path]::GetFullPath($RuntimeFolder)
 
 $packageRoot = Join-Path $projectRoot 'dist\FarFarVR'
 if (Test-Path -LiteralPath $packageRoot) { Remove-Item -LiteralPath $packageRoot -Recurse -Force }
@@ -14,12 +14,24 @@ if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed.' }
 New-Item -ItemType Directory -Path (Join-Path $packageRoot 'UE5.8') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $publishRoot 'FarFarWestVR.exe') -Destination (Join-Path $packageRoot 'Far Far VR.exe')
 
-foreach ($name in @('UEVRBackend.dll', 'LuaVR.dll', 'openxr_loader.dll', 'openvr_api.dll', 'BUILD-SOURCE.txt')) {
-    $src = Join-Path $runtimeRoot $name
-    if (Test-Path -LiteralPath $src) {
-        Copy-Item -LiteralPath $src -Destination (Join-Path $packageRoot 'UE5.8')
-    }
-}
+$runtimeNotice = @"
+Far Far VR Runtime
+------------------
+To respect upstream licensing and copyright boundaries, third-party UEVR runtime
+binaries (UEVRBackend.dll, LuaVR.dll, openxr_loader.dll, openvr_api.dll) are not
+bundled in this distribution archive.
+
+When you run 'Far Far VR.exe' and click 'START IN VR', the launcher will
+download and verify the pinned public UEVR base runtime.
+
+RELEASE CANDIDATE LIMITATION: that public base runtime lacks this mod's native
+reticle, effects and menu extensions. This candidate is for local validation
+with the existing custom runtime. Fresh-install delivery remains unresolved.
+
+Far Far VR mod by PR_VR (https://www.youtube.com/@PR_VR).
+Powered by UEVR created by praydog.
+"@
+Set-Content -LiteralPath (Join-Path $packageRoot 'UE5.8\README-RUNTIME.txt') -Value $runtimeNotice -Encoding utf8
 
 $profileSource = Join-Path $projectRoot 'Profile'
 $profileDest = Join-Path $packageRoot 'Profile'
@@ -42,6 +54,11 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'Launcher\Apply-Update.ps1') -Des
 Copy-Item -LiteralPath (Join-Path $packageRoot 'Far Far VR.exe') -Destination (Join-Path $projectRoot 'Far Far VR.exe') -Force
 Set-Content -LiteralPath (Join-Path $packageRoot 'version.txt') -Value $version -Encoding ascii
 
+# Match the documented upstream-download distribution route.
+$excludedRuntime = @('UEVRBackend.dll','LuaVR.dll','openxr_loader.dll','openvr_api.dll')
+$unexpectedRuntime = Get-ChildItem -LiteralPath $packageRoot -Recurse -File | Where-Object { $_.Name -in $excludedRuntime }
+if ($unexpectedRuntime) { throw 'Player package contains excluded third-party runtime binaries.' }
+
 $fileEntries = Get-ChildItem -LiteralPath $packageRoot -Recurse -File | ForEach-Object {
     [PSCustomObject]@{ File = $_.FullName.Substring($packageRoot.TrimEnd("\").Length + 1); SHA256 = (Get-FileHash -LiteralPath $_.FullName).Hash }
 }
@@ -61,5 +78,5 @@ if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::CreateFromDirectory($packageRoot, $zipPath)
 
-Write-Output "Complete release package staged: $packageRoot"
+Write-Output "Release package staged without third-party DLLs: $packageRoot"
 Write-Output "Clean release zip created: $zipPath"

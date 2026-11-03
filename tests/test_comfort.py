@@ -78,7 +78,8 @@ class ComfortTests(unittest.TestCase):
   console.find_variable=function() return nil end
   pc.Pawn=pawn('BP_LoadingScreen_C'); tick(nil,4)
   assert(values.VR_2DScreenMode=='true')
-  assert(files['farfarvr-comfort-status.txt']:find('guard unavailable',1,true))
+  assert(not files['farfarvr-comfort-status.txt'])
+  pc.Pawn=pawn('BP_Player_C');tick(nil,.1);assert(values.VR_2DScreenMode=='false')
   ''')
  def test_idle_does_not_query_rendering_variables(self):
   self.setup_lua().execute('''
@@ -253,6 +254,17 @@ class ComfortTests(unittest.TestCase):
   post_tick(); assert(taa_scaling==0 and aa_method==2)
   aa_method=1; post_tick(); assert(taa_scaling==1 and aa_method==1)
   aa_method=4; post_tick(); assert(taa_scaling==1 and aa_method==4)
+  ''')
+
+ def test_steady_gameplay_reuses_console_variables_and_has_no_periodic_status_writes(self):
+  self.setup_lua().execute('''
+  local finds=0;local original=console.find_variable
+  console.find_variable=function(self,key)finds=finds+1;return original(self,key)end
+  tick(nil,.01)
+  for i=1,1000 do tick(nil,.01);post_tick()end
+  assert(finds==2 and taa_scaling==0)
+  assert(not files['farfarvr-comfort-status.txt'] and not files['farfarvr-taa-status.txt'])
+  assert(files['farfarvr-comfort-restore.txt']~=nil)
   ''')
 
 if __name__=='__main__': unittest.main()

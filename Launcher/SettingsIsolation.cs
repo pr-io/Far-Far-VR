@@ -238,12 +238,7 @@ internal static class SettingsIsolation
             var setup = Setup.Load();
             if (File.Exists(setup.GamePath))
             {
-                string gameOpenXr = Path.Combine(Path.GetDirectoryName(setup.GamePath)!, "openxr_loader.dll");
-                if (File.Exists(gameOpenXr))
-                {
-                    File.Delete(gameOpenXr);
-                    LauncherLog.Write("Cleaned up session openxr_loader.dll from game binary folder.");
-                }
+                CleanupSessionOpenXrLoader(Path.GetDirectoryName(setup.GamePath)!);
             }
         }
         catch (Exception ex)
@@ -252,6 +247,27 @@ internal static class SettingsIsolation
         }
 
         LauncherLog.Write("Exited VR session. Desktop settings and controller bindings restored for normal gameplay.");
+    }
+
+    internal static void DeploySessionOpenXrLoader(string source, string gameBin)
+    {
+        string target = Path.Combine(gameBin, "openxr_loader.dll");
+        if (File.Exists(target)) return; // Never take ownership of a game's existing DLL.
+        File.Copy(source, target, overwrite: false);
+        File.WriteAllText(target + ".farfarvr-owned", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(target))));
+    }
+
+    internal static void CleanupSessionOpenXrLoader(string gameBin)
+    {
+        string target = Path.Combine(gameBin, "openxr_loader.dll"), marker = target + ".farfarvr-owned";
+        if (!File.Exists(marker)) return;
+        if (File.Exists(target))
+        {
+            string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(target)));
+            if (!hash.Equals(File.ReadAllText(marker).Trim(), StringComparison.OrdinalIgnoreCase)) return;
+            File.Delete(target);
+        }
+        File.Delete(marker);
     }
 
     private static void BackupDesktopSettings()

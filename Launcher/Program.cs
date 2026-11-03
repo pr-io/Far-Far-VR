@@ -372,7 +372,7 @@ internal static class GameLaunch
         {
             try
             {
-                File.Copy(runtimeOpenXr, gameOpenXr, overwrite: true);
+                SettingsIsolation.DeploySessionOpenXrLoader(runtimeOpenXr, gameBin);
                 LauncherLog.Write($"Deployed openxr_loader.dll to game binary folder: {gameOpenXr}");
             }
             catch (Exception ex)

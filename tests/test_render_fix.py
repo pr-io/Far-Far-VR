@@ -50,7 +50,7 @@ class RenderFixTests(unittest.TestCase):
         for k, v in pairs(cvars) do
             assert(v == 0, k .. " was not set to 0")
         end
-        assert(files['farfarvr-render-fix-status.txt']:find('Render fix initialized', 1, true))
+        assert(not files['farfarvr-render-fix-status.txt'])
         -- Simulate a level transition resetting motion blur:
         cvars['r.MotionBlurQuality'] = 4
         post_tick(nil, 4.0)
@@ -98,9 +98,9 @@ class RenderFixTests(unittest.TestCase):
         ''')
         lua.execute((ROOT / 'Profile/scripts/farfarvr_render_fix.lua').read_text(encoding='utf-8'))
         lua.execute('''
-        assert(files['farfarvr-render-fix-status.txt']:find('Waiting for console manager', 1, true))
+        assert(not files['farfarvr-render-fix-status.txt'])
         manager_ready = true
-        post_tick(nil, 0.1)
+        post_tick(nil, 3.1)
         for k, v in pairs(cvars) do
             assert(v == 0, k .. " was not set to 0 after manager became ready")
         end

@@ -2,7 +2,7 @@
 -- Powered by UEVR created by praydog
 -- Context-specific comfort, with recovery if UEVR saves during an override.
 local api,vr=uevr.api,uevr.params.vr
-local saved,mode,fault,status_time=nil,'gameplay',nil,0
+local saved,mode,fault=nil,'gameplay',nil
 local journal='farfarvr-comfort-restore.txt'
 local allowed={VR_MovementOrientation=true,VR_AimMethod=true,UI_FollowView=true,VR_DecoupledPitchUIAdjust=true,VR_2DScreenMode=true,VR_RoomscaleMovement=true,VR_NativeStereoFix=true,VR_DecoupledPitch=true}
 local overridden={VR_MovementOrientation='0',VR_AimMethod='0',UI_FollowView='false',VR_DecoupledPitchUIAdjust='false',VR_2DScreenMode='true',VR_RoomscaleMovement='false',VR_NativeStereoFix='false',VR_DecoupledPitch='false'}
@@ -130,12 +130,16 @@ local function restore_taa()
         if previous.variable:get_int()==0 then previous.variable:set_int(previous.original) end
     end
 end
+local taa_method,taa_upscale
 local function update_taa()
     -- No graphics CVar access is needed while the headset/runtime is idle.
     if mode=='idle' then restore_taa(); taa_status='Original AA scaling'; return end
-    local manager=api:get_console_manager()
-    local method=manager and manager:find_variable('r.AntiAliasingMethod')
-    local upscale=manager and manager:find_variable('r.TemporalAA.Upsampling')
+    if not taa_method or not taa_upscale then
+        local manager=api:get_console_manager()
+        taa_method=manager and manager:find_variable('r.AntiAliasingMethod')
+        taa_upscale=manager and manager:find_variable('r.TemporalAA.Upsampling')
+    end
+    local method,upscale=taa_method,taa_upscale
     if not method or not upscale then taa_status='TAA scaling guard unavailable'; return end
     local active=method:get_int()==2 and vr:get_mod_value('VR_NativeStereoFix')=='true'
         and mode~='idle' and mode~='cinematic' and mode~='map_loading'
@@ -156,16 +160,13 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(_,dt)
             local taa_ok,taa_error=pcall(update_taa)
             if not taa_ok then
                 taa_retry=1
+                taa_method,taa_upscale=nil,nil
                 pcall(restore_taa)
                 taa_status='ERROR in TAA scaling guard: '..tostring(taa_error)
                 fs.write('farfarvr-taa-status.txt',taa_status)
             end
         end
-        status_time=status_time+dt
-        if status_time>3 then
-            status_time=0
-            fs.write('farfarvr-comfort-status.txt','Context: '..mode..'\nAim: '..vr:get_mod_value('VR_AimMethod')..'\nHUD follows view: '..vr:get_mod_value('UI_FollowView')..'\nCinema screen: '..vr:get_mod_value('VR_2DScreenMode')..'\n'..taa_status)
-        end
+
     end)
     if not ok then fault=tostring(err); restore(); restore_taa(); fs.write('farfarvr-comfort-status.txt','ERROR: '..fault) end
 end)
@@ -179,6 +180,7 @@ uevr.sdk.callbacks.on_post_engine_tick(function()
             local taa_ok,taa_error=pcall(update_taa)
             if not taa_ok then
                 taa_retry=1
+                taa_method,taa_upscale=nil,nil
                 pcall(restore_taa)
                 taa_status='ERROR in TAA scaling guard: '..tostring(taa_error)
                 fs.write('farfarvr-taa-status.txt',taa_status)

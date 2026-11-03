@@ -11,7 +11,7 @@ internal sealed record ReleaseUpdate(string Tag, string Version, string Notes, s
 
 internal sealed class UpdateService
 {
-    internal const string CurrentVersion = "0.4.1";
+    internal const string CurrentVersion = "0.4.2";
     internal const string Repository = "pr-io/Far-Far-VR";
     internal static readonly string LocalRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWestVRLauncher");
@@ -62,7 +62,7 @@ internal sealed class UpdateService
     {
         using var request = CreateRequest(HttpMethod.Get,
             $"https://api.github.com/repos/{Repository}/releases?per_page=30");
-        request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.1");
+        request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/" + CurrentVersion);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound)
@@ -85,7 +85,7 @@ internal sealed class UpdateService
         try
         {
             using var request = CreateRequest(HttpMethod.Get, release.DownloadUrl);
-            request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.1");
+            request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/" + CurrentVersion);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is > 2_000_000_000)
@@ -209,7 +209,12 @@ internal sealed class UpdateService
 
     internal static void ValidatePackage(string root)
     {
-        foreach (string required in new[] { "Far Far VR.exe", "UE5.8\\README-RUNTIME.txt", "Profile\\config.txt", "manifest.json", "Apply-Update.ps1" })
+        string[] requiredFiles = { "Far Far VR.exe", "UE5.8\\README-RUNTIME.txt", "Profile\\config.txt", "manifest.json", "Apply-Update.ps1" };
+        // Player releases acquire UEVR from upstream; never redistribute it.
+        string[] excludedRuntime = { "UEVRBackend.dll", "LuaVR.dll", "openxr_loader.dll", "openvr_api.dll" };
+        if (Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Any(file => excludedRuntime.Contains(Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)))
+            throw new IOException("The player update contains third-party runtime binaries; use the runtime-separated release package.");
+        foreach (string required in requiredFiles)
             if (!File.Exists(Path.Combine(root, required))) throw new IOException("The release package is incomplete: " + required);
         using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "manifest.json")));
         JsonElement entries = manifest.RootElement;
@@ -217,7 +222,7 @@ internal sealed class UpdateService
             entries.TryGetProperty("files", out JsonElement files))
             entries = files;
         if (entries.ValueKind != JsonValueKind.Array) throw new IOException("The update package manifest is invalid.");
-        string? backendHash = null;
+        var verifiedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (JsonElement entry in entries.EnumerateArray())
         {
             if (!entry.TryGetProperty("File", out var fileValue) || fileValue.ValueKind != JsonValueKind.String ||
@@ -232,9 +237,18 @@ internal sealed class UpdateService
             if (!Regex.IsMatch(expected, "^[0-9A-Fa-f]{64}$")) throw new IOException("The update package manifest has an invalid SHA-256 hash.");
             string actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(full)));
             if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase)) throw new IOException("The update package failed its file integrity check: " + relative);
-            if (relative.Equals(@"UE5.8\UEVRBackend.dll", StringComparison.OrdinalIgnoreCase)) backendHash = actual;
+            if (!verifiedFiles.Add(relative)) throw new IOException("The update manifest contains duplicate files.");
         }
-        if (backendHash is not null && !Setup.CompatibleBackendHashes.Contains(backendHash, StringComparer.OrdinalIgnoreCase))
-            throw new IOException("The update package does not contain a pinned compatible VR backend.");
+        foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(root, file);
+            if (relative != "manifest.json" && !verifiedFiles.Contains(relative))
+                throw new IOException("The update contains a file missing from its integrity manifest: " + relative);
+        }
+        // The downloaded release may carry a newer engine than this launcher.
+        // Verify completeness/integrity here; its launcher owns the new pins.
+        foreach (string required in requiredFiles.Where(file => file != "manifest.json"))
+            if (!verifiedFiles.Contains(required.Replace('\\', Path.DirectorySeparatorChar)))
+                throw new IOException("The update manifest does not cover a required file: " + required);
     }
 }

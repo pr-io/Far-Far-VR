@@ -19,6 +19,8 @@ This repository contains the launcher, player profile, game-specific Lua modules
 
 > **Clean Distribution & Runtime Auto-Fetch:** To respect third-party copyright and open-source boundaries, Far Far VR releases do not bundle third-party runtime binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`). On first launch, the Far Far VR launcher automatically downloads and verifies the compatible [UEVR](https://github.com/praydog/UEVR) runtime package directly from the public repository. See [third-party notices](THIRD_PARTY.md).
 
+> **0.4.2 candidate status:** The latest local headset test confirmed the crosshair works and performance seems better; other unreported features still need wearer verification. The pinned public runtime download lacks the native reticle/effects/menu extensions used by this mod. Fresh-install delivery must be resolved before publishing this candidate as ready to play. The existing v0.4.1 asset was found to contain runtime DLLs despite its separation notice; its contents have not yet been replaced.
+
 ## Player Installation & Launch
 
 Requirements: 64-bit Windows 10/11, [Far Far West on Steam](https://store.steampowered.com/app/3124540/Far_Far_West/) installed through Steam, a compatible PCVR headset, and an active OpenXR runtime.
@@ -48,7 +50,7 @@ Far Far VR includes a built-in updater. Use the **Updates** tab in the in-game m
 - **VR Framework:** Powered by [UEVR](https://github.com/praydog/UEVR) created by praydog and contributors from the [Flat2VR](https://flat2vr.com/) community. Immense gratitude to praydog for the groundbreaking universal Unreal Engine VR injector and API.
 - **Game & Third-Party Disclaimers:**
   - Far Far VR is an unofficial community mod. Far Far VR has no affiliation with, and is not endorsed by or connected to, the developers of [Far Far West](https://store.steampowered.com/app/3124540/Far_Far_West/), Epic Games, or Unreal Engine.
-  - No copyrighted game assets, binaries, audio, textures, or save files are included in this distribution. Players must purchase and install the original game on [Steam](https://store.steampowered.com/app/3124540/Far_Far_West/).
+  - No game binaries, audio, textures, or player-progress saves are included in this distribution. Players must purchase and install the original game on [Steam](https://store.steampowered.com/app/3124540/Far_Far_West/).
 
 ## Controls & In-Game Features
 

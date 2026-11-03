@@ -51,6 +51,28 @@ finally
 // Check EnsureDesktopState safely handles missing session file
 SettingsIsolation.EnsureDesktopState();
 
+// Session cleanup may delete only an unchanged loader deployed by this launcher.
+string loaderTest = Path.Combine(Path.GetTempPath(), "farfarvr-loader-" + Guid.NewGuid().ToString("N"));
+try
+{
+    Directory.CreateDirectory(loaderTest);
+    string source = Path.Combine(loaderTest, "source.dll"), target = Path.Combine(loaderTest, "openxr_loader.dll");
+    File.WriteAllBytes(source, [1,2,3]);
+    File.WriteAllBytes(target, [9,8,7]);
+    SettingsIsolation.DeploySessionOpenXrLoader(source, loaderTest);
+    SettingsIsolation.CleanupSessionOpenXrLoader(loaderTest);
+    Check(File.ReadAllBytes(target).SequenceEqual(new byte[]{9,8,7}));
+    File.Delete(target);
+    SettingsIsolation.DeploySessionOpenXrLoader(source, loaderTest);
+    SettingsIsolation.CleanupSessionOpenXrLoader(loaderTest);
+    Check(!File.Exists(target));
+    SettingsIsolation.DeploySessionOpenXrLoader(source, loaderTest);
+    File.WriteAllBytes(target, [4,5,6]);
+    SettingsIsolation.CleanupSessionOpenXrLoader(loaderTest);
+    Check(File.ReadAllBytes(target).SequenceEqual(new byte[]{4,5,6}));
+}
+finally { if (Directory.Exists(loaderTest)) Directory.Delete(loaderTest, true); }
+
 Console.WriteLine("Settings isolation paths, simulation, and desktop preservation checks passed.");
 
 void Check(bool condition)

@@ -10,13 +10,23 @@ if (!(Test-Path -LiteralPath $SourceFolder)) {
 }
 $actual = git -C $SourceFolder rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $actual -ne $revision) { throw 'Engine source does not match the pinned working revision.' }
-$patch = Join-Path $projectRoot 'Engine\cinema-comfort.patch'
-git -C $SourceFolder apply --reverse --check $patch 2>$null
-if ($LASTEXITCODE -eq 0) { Write-Output 'Far Far VR production patch already applied.'; exit 0 }
-git -C $SourceFolder apply --check $patch
-if ($LASTEXITCODE -ne 0) { throw 'Production patch cannot be applied cleanly. Existing source changes were left untouched.' }
-git -C $SourceFolder apply $patch
-if ($LASTEXITCODE -ne 0) { throw 'Production patch application failed.' }
-git -C $SourceFolder diff --check
-if ($LASTEXITCODE -ne 0) { throw 'Patched source has whitespace errors.' }
-Write-Output 'Pinned source prepared. No runtime DLL was built or replaced.'
+# The patch references these product headers; Git diffs omit untracked files.
+$headerRoot = Join-Path $SourceFolder 'src\mods\vr'
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'Engine') -Filter 'FarFarWest*.hpp' -File |
+    ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $headerRoot -Force }
+function Apply-ProductPatch([string]$Root, [string]$Patch) {
+    git -C $Root apply --reverse --check $Patch 2>$null
+    if ($LASTEXITCODE -eq 0) { return }
+    git -C $Root apply --check $Patch
+    if ($LASTEXITCODE -ne 0) { throw "Product patch cannot be applied cleanly: $Patch. Existing changes were left untouched." }
+    git -C $Root apply $Patch
+    if ($LASTEXITCODE -ne 0) { throw "Product patch application failed: $Patch" }
+    git -C $Root diff --check
+    if ($LASTEXITCODE -ne 0) { throw "Patched source has whitespace errors: $Root" }
+}
+$sdkRoot = Join-Path $SourceFolder 'dependencies\submodules\UESDK'
+$sdkRevision = git -C $sdkRoot rev-parse HEAD
+if ($LASTEXITCODE -ne 0 -or $sdkRevision -ne '811b01498b61e6a0246615b4f2b4fb4f4067fb64') { throw 'Initialize the pinned UESDK submodule before applying product patches.' }
+Apply-ProductPatch $sdkRoot (Join-Path $projectRoot 'Engine\farfar-console.patch')
+Apply-ProductPatch $SourceFolder (Join-Path $projectRoot 'Engine\cinema-comfort.patch')
+Write-Output 'Pinned source and product headers prepared. No runtime DLL was built or replaced.'

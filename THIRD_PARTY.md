@@ -8,7 +8,7 @@
 
 - **Original Project:** [praydog/UEVR](https://github.com/praydog/UEVR), created by **praydog** and contributors.
 - **Attribution:** Powered by UEVR created by praydog. We extend sincere credit and gratitude to praydog and the Flatscreen to VR (Flat2VR) modding community for developing this universal VR framework.
-- **Distribution Separation:** In full compliance with upstream copyright boundaries, **no third-party UEVR binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`) are distributed or bundled within the Far Far VR mod release package**.
+- **Distribution Separation:** **The 0.4.2 candidate builder excludes third-party runtime binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`)**. Historical release contents require separate inspection.
 - **Auto-Fetch Mechanism:** On first setup, the Far Far VR launcher downloads the verified, compatible public UEVR runtime archive directly from GitHub into the user's local directory:
   - Compatible public release: [joeyhodge/UEVR `102626_FFR_SWGR_Patch`](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch)
   - Public archive SHA-256: `FDF325C62BA43BC1DA98ED5F453633FA106CAEF0DF9CB8121566F7AA138F6D55`
@@ -19,6 +19,10 @@
   - Compatible openxr_loader.dll SHA-256: `3BB4EB190024F92EECF4A0BF33669B5D0B27571DDF4C36A33C58DE199EE536C1`
   - Pinned UEVR source revision: `963b157573eaef20528b602d1d9790b8105819b3`
   - Pinned UESDK revision: `811b01498b61e6a0246615b4f2b4fb4f4067fb64`
+
+The pinned public base engine is not equivalent to the customized local backend: it lacks the native reticle/effects/menu-session extensions. A verified distribution path for those extensions remains a release blocker. The existing uploaded v0.4.1 asset was inspected and contains runtime DLLs despite its published separation notice. This candidate package excludes them; no blanket license or TOS certification is claimed.
+
+The pinned upstream engine license says "All rights reserved." See the [actual engine license](https://github.com/joeyhodge/UEVR/blob/963b157573eaef20528b602d1d9790b8105819b3/LICENSE); source visibility and attribution do not themselves establish redistribution rights. The game developer [encourages modding](https://steamcommunity.com/app/3124540/discussions/0/837249163025472585/); that statement is not permission to redistribute third-party engine binaries.
 
 Any source changes maintained by Far Far VR are kept as patches against the pinned revisions (see [Engine/README.md](Engine/README.md)).
 
@@ -45,4 +49,4 @@ All launcher code, scripts, configurations, documentation, and design assets aut
 ## Intellectual Property & Game Disclaimers
 
 - **Far Far West & Developers:** Far Far VR is an unofficial community mod. Far Far VR has no affiliation with, and is not endorsed by or connected to, the developers of Far Far West, Epic Games, or Unreal Engine.
-- **No Copyrighted Game Assets:** No game binaries, game assets, audio, textures, or save files are included in this distribution. Players must purchase and install the original game on Steam.
+- **No Copyrighted Game Assets:** No game binaries, game assets, audio, textures, or player-progress saves are included in this distribution. Players must purchase and install the original game on Steam.

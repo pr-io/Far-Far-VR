@@ -3,7 +3,7 @@
 -- Dedicated gun-following compositor layer. Information HUD placement is independent.
 local api,vr=uevr.api,uevr.params.vr
 local state,fault,last_pawn,title_camera,title_location,title_owner
-local scan_time,status_time=0,0
+local scan_time=0
 local retry_time,stage=0,'startup'
 local recover_hud
 local obj_cache = {}
@@ -146,9 +146,9 @@ local function build(pawn,pc,hud)
     s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=true;s.component:SetWindowFocusable(false)
     if s.component:get_class():find_property('bReceiveHardwareInput') then s.component.bReceiveHardwareInput=false end
     s.component:SetWidget(s.host)
-    pcall(function() s.component:InitWidget() end)
-    pcall(function() s.component:UpdateRenderTarget() end)
-    if s.component:get_class():find_function('RequestRenderUpdate') then s.component:RequestRenderUpdate() end
+    for _,method in ipairs({'InitWidget','UpdateRenderTarget'}) do
+        if s.component:get_class():find_function(method) then s.component[method](s.component) end
+    end
     s.component:RequestRedraw()
     s.token=string.format('%.0f',s.component:get_address());bridge('Source',s.token)
     fault=nil;log('Dedicated 256x256 gun reticle compositor layer; crosshair and hit X share private artwork host; no information-HUD projection.')
@@ -200,10 +200,11 @@ local function render_aim(s)
         end
         if has_drawn_prop then
             drawn=(item.isDrawn and item.isDrawn~=0) and true or false
+        else
+            drawn=true
         end
     end
-    local is_lobby=s.pawn:get_full_name():find('BP_Player_Lobby',1,true)~=nil
-    local firearm=drawn and not is_lobby
+    local firearm=drawn
     local start,direction
     if firearm then
         local camera=assert(s.pc.PlayerCameraManager,'Firing camera unavailable')
@@ -262,6 +263,8 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
         local pawn=pc.Pawn;title_height(pawn)
         if pawn~=last_pawn then
             cleanup()
+            -- A newly possessed lobby pawn establishes the game's forward direction.
+            -- Recenter rotation once here; preserve height and all gun targeting.
             if pawn and pawn:get_full_name():find('BP_Player_Lobby',1,true) then
                 if vr.recenter_view then pcall(vr.recenter_view) end
             end
@@ -279,13 +282,7 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
             end end
         end
         stage='private gun artwork';if state then update(state,pc,dt) end
-        status_time=status_time+dt
-        if status_time>=3 then
-            status_time=0;local s=state
-            local rt = s and s.component:get_class():find_function('GetRenderTarget') and s.component:GetRenderTarget()
-            local rt_desc = rt and string.format('%s', tostring(rt:get_full_name())) or 'nil'
-            fs.write('farfarvr-hud-status.txt',s and ('Independent gun compositor layer v13\nCrosshair, hit X and shield hit share one private 256x256 widget\nAttached to information HUD: false\nAim source '..tostring(s.aim_source)..'\nPer-view aim updates '..tostring(s.aim_updates or 0)..'\nNative ready '..tostring(s.ready)..'\nVisible '..tostring(s.showing)..'\nRenderTarget '..rt_desc..'\nArtwork updates '..s.updates) or 'Waiting for gameplay HUD sources')
-        end
+
     end)
     if not ok then recover_hud(err) end
 end)

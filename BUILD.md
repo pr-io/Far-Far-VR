@@ -38,11 +38,11 @@ pwsh -File scripts\Build-Engine.ps1
 pwsh -File scripts\Test-Engine.ps1
 ```
 
-The verified backend SHA-256 is `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558`.
+The current local-test backend SHA-256 is `2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558`. Native engine builds are for local testing; the player archive excludes third-party runtime DLLs.
 
 ## Build a player package
 
-The package builder verifies the accepted backend hash, builds the launcher, copies the player profile and documentation, and stages a complete release package in `dist\FarFarVR`:
+The package builder builds the launcher, copies the player profile and documentation, and stages the runtime-separated player archive in `dist\FarFarVR`. It rejects bundled UEVR runtime DLLs:
 
 ```powershell
 pwsh -File scripts\Build-Package.ps1
@@ -50,7 +50,7 @@ pwsh -File scripts\Build-Package.ps1
 
 The resulting package contains:
 - `Far Far VR.exe`
-- `UE5.8/` (UEVRBackend.dll, LuaVR.dll, openxr_loader.dll, openvr_api.dll, BUILD-SOURCE.txt)
+- `UE5.8/README-RUNTIME.txt` (upstream runtime acquisition instructions; no runtime DLLs)
 - `Profile/` (config.txt, cameras.txt, VRSettings.json, Touch bindings, Lua scripts)
 - Player documentation (`README.md`, `ROADMAP.md`, `THIRD_PARTY.md`)
 - `manifest.json` (SHA-256 checksums of all package files)

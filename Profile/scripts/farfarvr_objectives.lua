@@ -4,7 +4,7 @@
 -- the HMD and the actual UEVR compositor quad, independently of weapon aiming.
 local api,vr=uevr.api,uevr.params.vr
 local state,last_pawn,fault
-local scan_time,status_time=0,0
+local scan_time=0
 local obj_cache = {}
 local function find(path)
     local obj = obj_cache[path]
@@ -166,12 +166,7 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
             build(pawn,pc) -- lobby and mounted HUDs need no UI_Player dependency
         end
         if state then update(state,dt) end
-        status_time=status_time+dt
-        if status_time>5 then
-            status_time=0
-            fs.write('farfarvr-objectives-status.txt',state and string.format('HMD objective projection; original widgets on sharp HUD\nmarkers %d visible_in_front %d\nupdates %d\nquad_supported %s',
-                #state.items,state.visible_count or 0,state.updates,tostring(state.supported)) or 'Waiting for gameplay HUD')
-        end
+
     end)
     if not ok then fault=tostring(err); cleanup(); fs.write('farfarvr-objectives-status.txt','ERROR: '..fault) end
 end)

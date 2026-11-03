@@ -2,7 +2,7 @@
 -- Powered by UEVR created by praydog
 -- Keep flat-game horse orbit/tilt separate from UEVR's tracked head looking.
 local api=uevr.api
-local state,fault,elapsed=nil,nil,0
+local state,fault=nil,nil
 local function alive(o) return o~=nil and UEVR_UObjectHook.exists(o) end
 local rotator_struct
 local function rot(p,y,r)
@@ -59,11 +59,7 @@ end
 local function step(dt)
     if fault then return end
     local ok,err=pcall(function()
-        update(api:get_player_controller(0)); elapsed=elapsed+dt
-        if elapsed>3 then
-            elapsed=0
-            fs.write('farfarvr-mount-status.txt',state and 'Mounted: native stick orbit; controller aim disabled by comfort; camera collision enabled; distance/FOV unchanged' or 'Not mounted; original camera properties restored')
-        end
+        update(api:get_player_controller(0))
     end)
     if not ok then fault=tostring(err); restore(); fs.write('farfarvr-mount-status.txt','ERROR: '..fault) end
 end
