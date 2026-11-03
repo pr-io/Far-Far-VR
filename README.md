@@ -4,7 +4,7 @@ A community **PCVR mod for Far Far West on Steam**, created by [PR_VR](https://w
 
 **[Download Far Far VR 0.4.5](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.5/FarFarVR-v0.4.5.zip)** · [Release notes](https://github.com/pr-io/Far-Far-VR/releases/latest) · [VR Buddies Discord](https://discord.gg/PcsYNa6MS9)
 
-Download the release ZIP above. GitHub's **Code †’ Download ZIP** contains source code, not the playable mod.
+Download the release ZIP above. GitHub's **Code Download ZIP** contains source code, not the playable mod.
 
 ![Far Far VR launcher](docs/farfarvr-launcher.png)
 
