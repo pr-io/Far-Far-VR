@@ -68,10 +68,11 @@ local function cleanup()
     end
 end
 local function show_marker(s,visible)
-    if s.showing==visible and s.originals_showing==not visible then return end
+    local suppress_originals=visible and s.ready
+    if s.showing==visible and s.originals_showing==not suppress_originals then return end
     s.reticle:SetVisibility(visible and 4 or 2)
-    for _,item in ipairs(s.images) do item.wrapper:SetVisibility(visible and 2 or 4) end
-    s.showing=visible;s.originals_showing=not visible;s.dirty=true
+    for _,item in ipairs(s.images) do item.wrapper:SetVisibility(suppress_originals and 2 or 4) end
+    s.showing=visible;s.originals_showing=not suppress_originals;s.dirty=true
 end
 local function sync_images(s)
     local origin=s.images[1].layout.Offsets
@@ -128,7 +129,7 @@ local function build(pawn,pc,hud)
             local slot=item.parent:AddChildToCanvas(item.wrapper)
             slot:SetAnchors(full);slot:SetAlignment(xy(0,0));slot:SetPosition(xy(0,0));slot:SetSize(xy(0,0));slot:SetZOrder(item.z)
             local live_slot=item.wrapper:AddChildToCanvas(source);live_slot:SetLayout(item.layout);live_slot:SetZOrder(item.z)
-            item.wrapper:SetVisibility(2)
+            item.wrapper:SetVisibility(4)
             item.clone=assert(api:spawn_object(find('Class /Script/UMG.Image'),s.host.WidgetTree))
             item.slot=s.reticle:AddChildToCanvas(item.clone);item.slot:SetAnchors(center)
             item.slot:SetAlignment(xy(item.layout.Alignment.X,item.layout.Alignment.Y));item.slot:SetZOrder(item.z)
@@ -158,10 +159,10 @@ end
 local function update(s,pc,dt)
     s.animation_time=s.animation_time+dt
     local visible=vr.is_runtime_ready() and vr.is_hmd_active() and vr:get_mod_value('VR_2DScreenMode')~='true' and not pc.bShowMouseCursor and not uevr.params.functions.is_drawing_ui()
+    s.ready=vr:get_mod_value('VR_FarFarReticleReady')==s.token
     show_marker(s,visible);bridge('Active',visible and 'true' or 'false')
     s.aim_enabled=visible
     if not visible then bridge('Target','') end
-    s.ready=vr:get_mod_value('VR_FarFarReticleReady')==s.token
     if s.dirty or (visible and s.animation_time>=1/60) then
         sync_images(s);s.component:RequestRedraw();s.animation_time=0;s.dirty=false;s.updates=s.updates+1
     end
@@ -197,11 +198,10 @@ local function render_aim(s)
         end
         if has_drawn_prop then
             drawn=(item.isDrawn and item.isDrawn~=0) and true or false
-        else
-            drawn=true
         end
     end
-    local firearm=drawn
+    local is_lobby=s.pawn:get_full_name():find('BP_Player_Lobby',1,true)~=nil
+    local firearm=drawn and not is_lobby
     local start,direction
     if firearm then
         local camera=assert(s.pc.PlayerCameraManager,'Firing camera unavailable')
@@ -258,7 +258,13 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
     local ok,err=pcall(function()
         stage='player/context';local pc=api:get_player_controller(0);if not pc then return end
         local pawn=pc.Pawn;title_height(pawn)
-        if pawn~=last_pawn then cleanup();last_pawn=pawn;scan_time=0 end
+        if pawn~=last_pawn then
+            cleanup()
+            if pawn and pawn:get_full_name():find('BP_Player_Lobby',1,true) then
+                if vr.recenter_view then pcall(vr.recenter_view) end
+            end
+            last_pawn=pawn;scan_time=0
+        end
         if state and not valid_state(state) then cleanup();scan_time=0 end
         if not pawn or not pawn:get_full_name():find('BP_Player',1,true) then return end
         local backend=vr:get_mod_value('VR_FarFarReticleReady')

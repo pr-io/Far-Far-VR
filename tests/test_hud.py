@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools/lua-test'))
 from lupa.lua54 import LuaRuntime
 HARNESS=r'''
-files={};values={VR_FarFarReticleReady='0',VR_2DScreenMode='false',VR_WorldScale='1'};writes={};runtime=true;hmd=true;menu=false
+files={};values={VR_FarFarReticleReady='123',VR_2DScreenMode='false',VR_WorldScale='1'};writes={};runtime=true;hmd=true;menu=false
 fs={write=function(k,v)files[k]=v end}
 function node(kind)
  local n={kind=kind,valid=true,children={},RenderOpacity=1,ColorAndOpacity={R=1,G=1,B=1,A=1},RenderTransform={Translation={X=0,Y=0},Scale={X=1,Y=1},Shear={X=0,Y=0},Angle=0},Brush={native_material=kind}}
@@ -54,7 +54,7 @@ StructObject={new=function(...)assert(select('#',...)==1);return {native=true,st
 UEVR_UObjectHook={exists=function(o)return o and o.valid~=false end,activate=function()end,
  remove_motion_controller_state=function(o)o.untracked=true end,
  get_or_add_motion_controller_state=function(o)return {set_hand=function(_,v)o.hand=v end,set_permanent=function()end}end}
-uevr={api=api,params={vr={is_runtime_ready=function()return runtime end,is_hmd_active=function()return hmd end,
+uevr={api=api,params={vr={recentered=0,recenter_view=function()recentered_count=(recentered_count or 0)+1 end,is_runtime_ready=function()return runtime end,is_hmd_active=function()return hmd end,
  get_mod_value=function(_,k)assert(not k:find('UI_',1,true),'Information HUD settings must not be read');return values[k]end,
  set_mod_value=function(k,v)assert(k:find('VR_FarFarReticle',1,true)==1);values[k]=v;table.insert(writes,{k,v})end},functions={log_info=function()end,log_error=function()end,is_drawing_ui=function()return menu end}},
  sdk={callbacks={on_post_engine_tick=function(f)tick=f end,on_pre_calculate_stereo_view_offset=function(f)view_tick=f end,on_script_reset=function(f)reset=f end}}}
@@ -99,7 +99,7 @@ class HudTests(unittest.TestCase):
   menu=true;update(s,pc,.02);assert(not s.showing and values.VR_FarFarReticleActive=='false');assert(s.images[1].wrapper.set_Visibility==4)
   menu=false;update(s,pc,.02);assert(s.showing and s.images[1].wrapper.set_Visibility==2)""")
  def test_waiting_native_layer_does_not_display_centered_gameplay_images(self):
-  self.check("local s=built();update(s,pc,.02);assert(not s.ready and s.images[1].wrapper.set_Visibility==2);values.VR_FarFarReticleReady='123';update(s,pc,.02);assert(s.ready)")
+  self.check("values.VR_FarFarReticleReady='0';local s=built();update(s,pc,.02);assert(not s.ready and s.showing and s.images[1].wrapper.set_Visibility==4);values.VR_FarFarReticleReady='123';update(s,pc,.02);assert(s.ready and s.images[1].wrapper.set_Visibility==2)")
  def test_cinema_and_runtime_idle_suspend_only_reticle(self):
   self.check("""local s=built();update(s,pc,.02);values.VR_2DScreenMode='true';update(s,pc,.02);assert(not s.showing)
   values.VR_2DScreenMode='false';update(s,pc,.02);assert(s.showing);hmd=false;update(s,pc,.02);assert(not s.showing and health:GetParent()==root)""")
@@ -195,4 +195,19 @@ class HudTests(unittest.TestCase):
   local x,y,z=values.VR_FarFarReticleTarget:match('([^ ]+) ([^ ]+) ([^ ]+)')
   assert(math.abs(tonumber(x)-.5)<1e-6 and math.abs(tonumber(y)-.2)<1e-6 and math.abs(tonumber(z)+2.85)<1e-6)
   assert(s.aim_source=='tracked right hand')""")
+ def test_lobby_pawn_uses_tracked_right_hand(self):
+   self.check("""local s=built();update(s,pc,.02)
+   function pawn:get_full_name()return 'BP_Player_Lobby_C /Game/Levels/L_Lobby.PersistentLevel.BP_Player_Lobby_C_1' end
+   pawn.AC_PlayerItems={equipedItem={valid=true,canBeReloaded=false,isDrawn=true,get_class=function()return {find_property=function(_,k)if k=='isDrawn' then return {} end end}end}}
+   pc.PlayerCameraManager=node('firing camera');pc.PlayerCameraManager.location={X=20,Y=10,Z=30}
+   s.hand.location={X=10,Y=50,Z=20};view_tick()
+   local x,y,z=values.VR_FarFarReticleTarget:match('([^ ]+) ([^ ]+) ([^ ]+)')
+   assert(math.abs(tonumber(x)-.5)<1e-6 and math.abs(tonumber(y)-.2)<1e-6 and math.abs(tonumber(z)+2.85)<1e-6)
+   assert(s.aim_source=='tracked right hand')""")
+ def test_lobby_pawn_spawn_recenters_view(self):
+   self.check("""recentered_count=0
+   local lobby_pawn=node('lobby_pawn');function lobby_pawn:get_full_name()return 'BP_Player_Lobby_C /Game/Levels/L_Lobby' end
+   function lobby_pawn:AddComponentByClass(cls)return pawn:AddComponentByClass(cls) end
+   pc.Pawn=lobby_pawn;tick(nil,0.1)
+   assert(recentered_count==1)""")
 if __name__=='__main__':unittest.main()
