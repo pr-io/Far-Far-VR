@@ -65,3 +65,7 @@ User: "i tested and the crosshair worked. and performance seemed better. push up
 ## Fresh-install repair design
 
 See [Engine/RUNTIME-DELIVERY.md](Engine/RUNTIME-DELIVERY.md) for the exact matching-upstream and independent-plugin routes, dependencies and release gates. Neither route is represented as completed. The tested local runtime is preserved.
+
+## 0.4.3 automatic setup implementation
+
+The technical runtime acquisition gap is now repaired locally with exact Windows MSDelta reconstruction of the tested 2F30 backend, not a gameplay rewrite or reduced-feature fallback. 29 runtime setup checks pass, including a real upstream network download into an empty folder, failure preservation, cancellation and retry. The existing Live copy remains unchanged. The local player ZIP includes the 1.5 MB delta and no complete runtime DLLs. Public distribution of that delta has not been license-cleared; no binary patch or 0.4.3 release asset has been pushed. See Engine/RUNTIME-DELIVERY.md.

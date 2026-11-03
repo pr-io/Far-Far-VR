@@ -11,7 +11,7 @@ internal sealed record ReleaseUpdate(string Tag, string Version, string Notes, s
 
 internal sealed class UpdateService
 {
-    internal const string CurrentVersion = "0.4.2";
+    internal const string CurrentVersion = "0.4.3";
     internal const string Repository = "pr-io/Far-Far-VR";
     internal static readonly string LocalRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWestVRLauncher");
@@ -209,7 +209,7 @@ internal sealed class UpdateService
 
     internal static void ValidatePackage(string root)
     {
-        string[] requiredFiles = { "Far Far VR.exe", "UE5.8\\README-RUNTIME.txt", "Profile\\config.txt", "manifest.json", "Apply-Update.ps1" };
+        string[] requiredFiles = { "Far Far VR.exe", "UE5.8\\README-RUNTIME.txt", "Profile\\config.txt", "manifest.json", "Apply-Update.ps1", "Runtime\\backend.ffvrdelta" };
         // Player releases acquire UEVR from upstream; never redistribute it.
         string[] excludedRuntime = { "UEVRBackend.dll", "LuaVR.dll", "openxr_loader.dll", "openvr_api.dll" };
         if (Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Any(file => excludedRuntime.Contains(Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)))

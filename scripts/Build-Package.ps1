@@ -1,6 +1,6 @@
 param([string]$RuntimeFolder = (Join-Path $PSScriptRoot '..\UE5.8'))
 $ErrorActionPreference = 'Stop'
-$version = '0.4.2'
+$version = '0.4.3'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $runtimeRoot = [IO.Path]::GetFullPath($RuntimeFolder)
 
@@ -24,14 +24,24 @@ bundled in this distribution archive.
 When you run 'Far Far VR.exe' and click 'START IN VR', the launcher will
 download and verify the pinned public UEVR base runtime.
 
-RELEASE CANDIDATE LIMITATION: that public base runtime lacks this mod's native
-reticle, effects and menu extensions. This candidate is for local validation
-with the existing custom runtime. Fresh-install delivery remains unresolved.
+The launcher applies the packaged Far Far VR delta locally using Windows'
+built-in patching API, then verifies that the result exactly matches the
+tested custom engine. No compiler or manual runtime copying is required.
+
+A delta is not a license exemption. Upstream retains its rights; this package
+must not be described as granting engine redistribution or commercial rights.
 
 Far Far VR mod by PR_VR (https://www.youtube.com/@PR_VR).
 Powered by UEVR created by praydog.
 "@
 Set-Content -LiteralPath (Join-Path $packageRoot 'UE5.8\README-RUNTIME.txt') -Value $runtimeNotice -Encoding utf8
+
+$patchSource = Join-Path $projectRoot 'Runtime\backend.ffvrdelta'
+if (!(Test-Path -LiteralPath $patchSource)) { throw 'The verified runtime patch is missing.' }
+$patchHash = (Get-FileHash -LiteralPath $patchSource).Hash
+if ($patchHash -ne 'EC35A59458BBD782DC625031D38B333ECA1CBA157DAD4251A1CEFDC36D7B7716') { throw 'The runtime patch does not match the tested engine.' }
+New-Item -ItemType Directory -Path (Join-Path $packageRoot 'Runtime') -Force | Out-Null
+Copy-Item -LiteralPath $patchSource -Destination (Join-Path $packageRoot 'Runtime\backend.ffvrdelta')
 
 $profileSource = Join-Path $projectRoot 'Profile'
 $profileDest = Join-Path $packageRoot 'Profile'

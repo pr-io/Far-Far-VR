@@ -20,8 +20,6 @@ internal sealed class Setup
     internal static readonly string[] CompatibleBackendHashes = new[]
     {
         CurrentBackendHash,
-        "0CFB68B928FFA5F5516BA866AFB676EB716F99A72B05B736CC5FB3053DA94029",
-        "179BB4A6F61574AC16621E2C7C9E2E27F3AA328462243417D177527647315558"
     };
     public const string UevrRuntimeDownloadUrl = "https://github.com/joeyhodge/UEVR/releases/download/102626_FFR_SWGR_Patch/uevr.zip";
     public const string UevrRuntimeArchiveHash = "FDF325C62BA43BC1DA98ED5F453633FA106CAEF0DF9CB8121566F7AA138F6D55";
@@ -143,13 +141,14 @@ internal sealed class Setup
         progress?.Report("VR runtime missing. Fetching compatible UEVR components...");
         LauncherLog.Write($"VR runtime missing in '{setup.RuntimeFolder}'. Starting auto-fetch from {UevrRuntimeDownloadUrl}");
 
-        Directory.CreateDirectory(setup.RuntimeFolder);
+        string patchPath = Path.Combine(AppContext.BaseDirectory, "Runtime", RuntimePatch.PatchFile);
+        if (!File.Exists(patchPath)) throw new IOException("The Far Far VR runtime patch is missing. Extract the complete release ZIP, then run Far Far VR.exe from that folder.");
         string tempZip = Path.Combine(Path.GetTempPath(), $"uevr_{Guid.NewGuid():N}.zip");
         try
         {
-            using (var httpClient = new HttpClient())
+            using (var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
             {
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.1 (PR_VR)");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.3 (PR_VR)");
                 using var response = await httpClient.GetAsync(UevrRuntimeDownloadUrl, HttpCompletionOption.ResponseHeadersRead, token);
                 response.EnsureSuccessStatusCode();
 
@@ -194,28 +193,9 @@ internal sealed class Setup
                 throw new InvalidOperationException($"VR runtime download checksum mismatch (expected {UevrRuntimeArchiveHash}, got {archiveHash}).");
             }
 
-            progress?.Report("Extracting VR runtime components...");
-            LauncherLog.Write("Archive verified. Extracting components...");
-            using (var archive = ZipFile.OpenRead(tempZip))
-            {
-                var filesToExtract = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    "UEVRBackend.dll",
-                    "LuaVR.dll",
-                    "openxr_loader.dll",
-                    "openvr_api.dll"
-                };
-
-                foreach (var entry in archive.Entries)
-                {
-                    if (filesToExtract.Contains(entry.Name))
-                    {
-                        string destPath = Path.Combine(setup.RuntimeFolder, entry.Name);
-                        entry.ExtractToFile(destPath, overwrite: true);
-                        LauncherLog.Write($"Extracted {entry.Name} to {destPath}");
-                    }
-                }
-            }
+            progress?.Report("Installing the tested Far Far VR customizations...");
+            await Task.Run(() => RuntimePatch.InstallArchive(tempZip, patchPath, setup.RuntimeFolder, token), token);
+            if (!setup.IsRuntimeInstalled) throw new IOException("Runtime setup did not produce the verified Far Far VR build.");
 
             string sourceNotice = Path.Combine(setup.RuntimeFolder, "BUILD-SOURCE.txt");
             if (!File.Exists(sourceNotice))
@@ -224,7 +204,9 @@ internal sealed class Setup
                     "UEVR compatibility build: joeyhodge/UEVR\n" +
                     "Release: 102626_FFR_SWGR_Patch\n" +
                     "https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch\n" +
-                    "Auto-fetched by Far Far VR Launcher (PR_VR) on first setup.\n" +
+                    "Auto-fetched from upstream and customized locally by Far Far VR.\n" +
+                    $"Final backend SHA256: {CurrentBackendHash}\n" +
+                    $"Runtime patch SHA256: {RuntimePatch.PatchHash}\n" +
                     $"Archive SHA256: {UevrRuntimeArchiveHash}\n" +
                     "Powered by UEVR created by praydog.\n");
             }

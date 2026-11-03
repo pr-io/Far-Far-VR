@@ -54,3 +54,10 @@ The resulting package contains:
 - `Profile/` (config.txt, cameras.txt, VRSettings.json, Touch bindings, Lua scripts)
 - Player documentation (`README.md`, `ROADMAP.md`, `THIRD_PARTY.md`)
 - `manifest.json` (SHA-256 checksums of all package files)
+
+
+## Local runtime-delivery candidate (0.4.3)
+
+The publisher-only command `python scripts/Build-RuntimePatch.py --base <pinned-upstream-UEVRBackend.dll> --target <tested-custom-UEVRBackend.dll>` creates the local `Runtime/backend.ffvrdelta` artifact. The player installer uses Windows MSDelta; Python and build tools are not player dependencies. The builder pins the delta hash and the installer pins the final tested backend hash. Run `dotnet run --project tests/RuntimeDeliveryTests/RuntimeDeliveryTests.csproj -- <pinned-upstream-zip> Runtime/backend.ffvrdelta` to exercise reconstruction, the real online installer, integrity refusals, cancellation and rollback.
+
+This produces a technically functioning local package, not a verified grant to distribute the engine delta. See [runtime delivery status](Engine/RUNTIME-DELIVERY.md). Do not publish the local candidate as rights-cleared.

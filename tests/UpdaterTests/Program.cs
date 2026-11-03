@@ -11,7 +11,7 @@ var releasesJson = """
 ]
 """;
 using JsonDocument releases = JsonDocument.Parse(releasesJson);
-Check(UpdateService.CurrentVersion == "0.4.2");
+Check(UpdateService.CurrentVersion == "0.4.3");
 ReleaseUpdate? update = UpdateService.FindUpdate(releases.RootElement, "0.4.1");
 Check(update is { Tag: "v0.4.2", Version: "v0.4.2", Notes: "Fixes and comfort improvements." });
 Check(update!.AssetName == "FarFarVR-v0.4.2.zip" && update.DownloadUrl.Scheme == Uri.UriSchemeHttps);
@@ -75,7 +75,8 @@ try
         ["Far Far VR.exe"] = [1, 2, 3],
         [@"UE5.8\README-RUNTIME.txt"] = [4, 5, 6],
         [@"Profile\config.txt"] = [7, 8, 9],
-        ["Apply-Update.ps1"] = [10, 11, 12]
+        ["Apply-Update.ps1"] = [10, 11, 12],
+        [@"Runtime\backend.ffvrdelta"] = [13, 14, 15]
     };
     foreach (var (relative, content) in packageFiles)
     {

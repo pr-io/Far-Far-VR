@@ -9,5 +9,6 @@
     <Compile Include="../../Launcher/SettingsIsolation.cs" Link="SettingsIsolation.cs" />
     <Compile Include="../../Launcher/SocialBindings.cs" Link="SocialBindings.cs" />
     <Compile Include="../../Launcher/Setup.cs" Link="Setup.cs" />
+    <Compile Include="../../Launcher/RuntimePatch.cs" Link="RuntimePatch.cs" />
   </ItemGroup>
 </Project>

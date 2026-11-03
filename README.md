@@ -17,9 +17,9 @@ This repository contains the launcher, player profile, game-specific Lua modules
 
 > **Early access:** Far Far VR is in active development. Compatibility and comfort can vary by PC, headset, OpenXR runtime, and game update; back up your profile and settings before installing.
 
-> **Clean Distribution & Runtime Auto-Fetch:** To respect third-party copyright and open-source boundaries, Far Far VR releases do not bundle third-party runtime binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`). On first launch, the Far Far VR launcher automatically downloads and verifies the compatible [UEVR](https://github.com/praydog/UEVR) runtime package directly from the public repository. See [third-party notices](THIRD_PARTY.md).
+> **Clean Distribution & Runtime Auto-Fetch:** To respect third-party copyright and open-source boundaries, Far Far VR releases do not bundle third-party runtime binaries (`UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll`, `openvr_api.dll`). On first launch, the launcher downloads and verifies the upstream runtime, applies the bundled Far Far VR customization delta locally using Windows, and verifies the resulting engine matches the exact tested build. No compiler, developer tools or manual runtime copying is required. This describes the locally tested 0.4.3 candidate; patch distribution rights are still under review. See [third-party notices](THIRD_PARTY.md).
 
-> **0.4.2 candidate status:** The latest local headset test confirmed the crosshair works and performance seems better; other unreported features still need wearer verification. The pinned public runtime download lacks the native reticle/effects/menu extensions used by this mod. Fresh-install delivery must be resolved before publishing this candidate as ready to play. The existing v0.4.1 asset was found to contain runtime DLLs despite its separation notice; its contents have not yet been replaced.
+> **0.4.3 candidate status:** The local crosshair/performance recovery is wearer-tested. Automatic first-launch runtime reconstruction has passed an empty-folder download test and setup failure/rollback checks. The runtime delta's distribution rights remain unverified, so no public 0.4.3 release asset has been published. A functioning installer is not a license exemption.
 
 ## Player Installation & Launch
 
@@ -30,6 +30,7 @@ Requirements: 64-bit Windows 10/11, [Far Far West on Steam](https://store.steamp
 3. Connect your PCVR headset (OpenXR runtime active).
 4. Click **START IN VR**. Far Far VR automatically:
    - Downloads and verifies the compatible [UEVR](https://github.com/praydog/UEVR) runtime if not already present on your system.
+   - Applies the bundled runtime customization delta and verifies the exact final engine hash.
    - Sets up or updates the [Far Far West on Steam](https://store.steampowered.com/app/3124540/Far_Far_West/) profile and Lua modules in `%APPDATA%\UnrealVRMod\FarFarWest-Win64-Shipping`.
    - Launches the game through Steam and waits for the title screen.
    - Injects the verified compatibility backend and confirms stereo/engine hooks.
