@@ -148,7 +148,7 @@ internal sealed class Setup
         {
             using (var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
             {
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.4 (PR_VR)");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.5 (PR_VR)");
                 using var response = await httpClient.GetAsync(UevrRuntimeDownloadUrl, HttpCompletionOption.ResponseHeadersRead, token);
                 response.EnsureSuccessStatusCode();
 

@@ -10,13 +10,13 @@ Use Windows x64 and the .NET 8 SDK:
 dotnet publish Launcher\FarFarWestVR.csproj -c Release -r win-x64 -o Launcher\publish
 ```
 
-The launcher includes its .NET runtime. The release builder also needs the pinned customization delta in the ignored local `Runtime` folder. Obtain the matching [0.4.4 delta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.4/backend.ffvrdelta); its hash is checked by the builder and installer.
+The launcher includes its .NET runtime. The release builder also needs the pinned customization delta in the ignored local `Runtime` folder. Obtain the matching [0.4.5 delta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.5/backend.ffvrdelta); its hash is checked by the builder and installer.
 
 ```powershell
 pwsh -File scripts\Build-Package.ps1
 ```
 
-Output: `dist/FarFarVR-v0.4.4.zip`. It includes the launcher, player profile, delta, updater helper, documentation, images and SHA-256 manifest. Tests, source checkouts, development reports and complete upstream runtime DLLs are excluded.
+Output: `dist/FarFarVR-v0.4.5.zip`. It includes the launcher, player profile, delta, updater helper, documentation, images and SHA-256 manifest. Tests, source checkouts, development reports and complete upstream runtime DLLs are excluded.
 
 ## Regression checks
 

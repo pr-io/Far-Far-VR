@@ -1,6 +1,6 @@
 -- Far Far VR by PR_VR (https://www.youtube.com/@PR_VR)
 -- Powered by UEVR created by praydog
--- Dedicated gun-following compositor layer. Information HUD placement is independent.
+-- Original animated artwork follows the firing ray using the accepted per-view renderer.
 local api,vr=uevr.api,uevr.params.vr
 local state,fault,last_pawn,title_camera,title_location,title_owner
 local scan_time=0
@@ -59,8 +59,7 @@ local function cleanup()
         end) end
         if alive(item.wrapper) then pcall(function() item.wrapper:RemoveFromParent() end) end
     end
-    if alive(s.component) then pcall(function() s.component:SetWidget(nil);s.component:K2_DestroyComponent(s.pawn) end) end
-    if alive(s.host) then pcall(function() s.host:RemoveFromParent() end) end
+    if alive(s.canvas) then pcall(function() s.canvas:RemoveFromParent() end) end
     for _,anchor in ipairs({s.head,s.hand}) do
         if alive(anchor) then pcall(function()
             UEVR_UObjectHook.remove_motion_controller_state(anchor);anchor:K2_DestroyComponent(s.pawn)
@@ -68,7 +67,7 @@ local function cleanup()
     end
 end
 local function show_marker(s,visible)
-    local suppress_originals=visible and s.ready
+    local suppress_originals=s.aim_enabled or visible
     if s.showing==visible and s.originals_showing==not suppress_originals then return end
     s.reticle:SetVisibility(visible and 4 or 2)
     for _,item in ipairs(s.images) do item.wrapper:SetVisibility(suppress_originals and 2 or 4) end
@@ -110,14 +109,18 @@ local function build(pawn,pc,hud)
     s.hand=assert(pawn:AddComponentByClass(find('Class /Script/Engine.SceneComponent'),true,identity,false))
     local hand_tracking=assert(UEVR_UObjectHook.get_or_add_motion_controller_state(s.hand))
     hand_tracking:set_hand(1);hand_tracking:set_permanent(true)
-    local library=find('Class /Script/UMG.WidgetBlueprintLibrary'):get_class_default_object()
-    local host_class=find('WidgetBlueprintGeneratedClass /Game/Interfaces/UI_ScreenFlashes.UI_ScreenFlashes_C')
-    s.host=assert(library:Create(pc,host_class,pc),'Private reticle host unavailable');s.host:StopAllAnimations()
-    s.canvas=assert(api:spawn_object(find('Class /Script/UMG.CanvasPanel'),s.host.WidgetTree))
-    s.host.WidgetTree.RootWidget=s.canvas;s.reticle=s.canvas
+    s.layout=find('Class /Script/UMG.WidgetLayoutLibrary'):get_class_default_object()
     local center=native('Slate.Anchors',{Minimum={X=.5,Y=.5},Maximum={X=.5,Y=.5}})
     local full=native('Slate.Anchors',{Minimum={X=0,Y=0},Maximum={X=1,Y=1}})
-    -- The clones belong only to the PRIVATE offscreen widget, never UI_Player.
+    s.canvas=assert(api:spawn_object(find('Class /Script/UMG.CanvasPanel'),hud.WidgetTree))
+    local layer_slot=s.root:AddChildToCanvas(s.canvas)
+    layer_slot:SetAnchors(full);layer_slot:SetPosition(xy(0,0));layer_slot:SetSize(xy(0,0));layer_slot:SetZOrder(100)
+    s.canvas:SetVisibility(4)
+    s.reticle=assert(api:spawn_object(find('Class /Script/UMG.CanvasPanel'),hud.WidgetTree))
+    s.reticle_slot=s.canvas:AddChildToCanvas(s.reticle)
+    s.reticle_slot:SetAnchors(center);s.reticle_slot:SetAlignment(xy(.5,.5));s.reticle_slot:SetSize(xy(256,256))
+    s.reticle:SetVisibility(2)
+    -- Keep game-owned originals alive for hit animations; move their live copies.
     for _,key in ipairs({'Crosshair_Top','HitImage','HitShield'}) do
         local source=hud[key]
         if source then
@@ -130,44 +133,28 @@ local function build(pawn,pc,hud)
             slot:SetAnchors(full);slot:SetAlignment(xy(0,0));slot:SetPosition(xy(0,0));slot:SetSize(xy(0,0));slot:SetZOrder(item.z)
             local live_slot=item.wrapper:AddChildToCanvas(source);live_slot:SetLayout(item.layout);live_slot:SetZOrder(item.z)
             item.wrapper:SetVisibility(4)
-            item.clone=assert(api:spawn_object(find('Class /Script/UMG.Image'),s.host.WidgetTree))
+            item.clone=assert(api:spawn_object(find('Class /Script/UMG.Image'),hud.WidgetTree))
             item.slot=s.reticle:AddChildToCanvas(item.clone);item.slot:SetAnchors(center)
             item.slot:SetAlignment(xy(item.layout.Alignment.X,item.layout.Alignment.Y));item.slot:SetZOrder(item.z)
         end
     end
     assert(#s.images>0,'No original reticle artwork found');sync_images(s)
-    s.component=assert(pawn:AddComponentByClass(find('Class /Script/UMG.WidgetComponent'),true,identity,false))
-    s.component:SetWidgetSpace(0);s.component:SetDrawSize(xy(256,256))
-    s.component:SetCollisionEnabled(0);s.component:SetRenderInMainPass(false);s.component:SetRenderInDepthPass(false);s.component:SetCastShadow(false)
-    for _,method in ipairs({'SetRenderCustomDepth','SetVisibleInRayTracing','SetReceivesDecals'}) do
-        if s.component:get_class():find_function(method) then s.component[method](s.component,false) end
-    end
-    if s.component:get_class():find_property('BackgroundColor') then s.component.BackgroundColor=native('CoreUObject.LinearColor',{R=0,G=0,B=0,A=0}) end
-    s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=true;s.component:SetWindowFocusable(false)
-    if s.component:get_class():find_property('bReceiveHardwareInput') then s.component.bReceiveHardwareInput=false end
-    s.component:SetWidget(s.host)
-    for _,method in ipairs({'InitWidget','UpdateRenderTarget'}) do
-        if s.component:get_class():find_function(method) then s.component[method](s.component) end
-    end
-    s.component:RequestRedraw()
-    s.token=string.format('%.0f',s.component:get_address());bridge('Source',s.token)
-    fault=nil;log('Dedicated 256x256 gun reticle compositor layer; crosshair and hit X share private artwork host; no information-HUD projection.')
+    fault=nil;log('Restored per-view firing-ray renderer for crosshair, hit X and hands; no offscreen target or readiness handshake.')
 end
 local function valid_state(s)
-    if not alive(s.hud) or not s.hud:IsInViewport() or s.hud.WidgetTree.RootWidget~=s.root or not alive(s.host) or not alive(s.component) or not alive(s.head) or not alive(s.hand) then return false end
+    if not alive(s.hud) or not s.hud:IsInViewport() or s.hud.WidgetTree.RootWidget~=s.root or not alive(s.canvas) or not alive(s.reticle) or not alive(s.head) or not alive(s.hand) then return false end
     for _,item in ipairs(s.images) do if not alive(item.source) or not alive(item.clone) or not alive(item.wrapper) or not item.source.Slot then return false end end
     return true
 end
 local function update(s,pc,dt)
     s.animation_time=s.animation_time+dt
     local visible=vr.is_runtime_ready() and vr.is_hmd_active() and vr:get_mod_value('VR_2DScreenMode')~='true' and not pc.bShowMouseCursor and not uevr.params.functions.is_drawing_ui()
-    s.ready=vr:get_mod_value('VR_FarFarReticleReady')==s.token
-    show_marker(s,visible);bridge('Active',visible and 'true' or 'false')
     s.aim_enabled=visible
-    if not visible then bridge('Target','') end
+    if not visible then show_marker(s,false) end
     if s.dirty or (visible and s.animation_time>=1/60) then
-        sync_images(s);s.component:RequestRedraw();s.animation_time=0;s.dirty=false;s.updates=s.updates+1
+        sync_images(s);s.animation_time=0;s.dirty=false
     end
+
 end
 local function render_aim(s)
     if not s.aim_enabled then return end
@@ -221,12 +208,31 @@ local function render_aim(s)
     local forward=dx*cp*cy+dy*cp*sy+dz*sp
     local right=dx*(sr*sp*cy-cr*sy)+dy*(sr*sp*sy+cr*cy)-dz*sr*cp
     local up=-dx*(cr*sp*cy+sr*sy)+dy*(cy*sr-cr*sp*sy)+dz*cr*cp
-    local units=100*math.max(.1,tonumber(vr:get_mod_value('VR_WorldScale')) or 1)
-    -- Transport a point in headset-local OpenXR axes, not HUD pixels. Native
-    -- composition reconstructs its stage pose without consulting HUD settings.
-    bridge('Target',string.format('%.8f %.8f %.8f',right/units,up/units,-forward/units))
+    -- Accepted v7 firing-ray projection, sampled after per-view tracking updates.
+    -- This moves the artwork with the gun/hand instead of leaving a centered fallback.
+    local distance=tonumber(vr:get_mod_value('UI_Distance')) or 2.75
+    local height=tonumber(vr:get_mod_value('UI_Size')) or 2
+    local xoffset=tonumber(vr:get_mod_value('UI_X_Offset')) or 0
+    local yoffset=tonumber(vr:get_mod_value('UI_Y_Offset')) or 0
+    local viewport=s.layout:GetViewportSize(s.pc)
+    local logical_height=viewport.Y/math.max(s.layout:GetViewportScale(s.pc),.01)
+    if forward<=1 or height<=0 then show_marker(s,false);return end
+    local x=(right/forward*distance-xoffset)/height*logical_height
+    local y=-(up/forward*distance-yoffset)/height*logical_height
+    if vr:get_mod_value('UI_FollowView')~='true' or vr:get_mod_value('UI_OverlayType')~='0' then
+        -- Use the existing native surface projection when the HUD is locked.
+        -- Its coordinates run from 0 to 1 across the actual UI surface.
+        local aim=vr:get_mod_value('VR_FarFarGunAim')
+        local ax,ay
+        if type(aim)=='string' then ax,ay=aim:match('^([%+%-%.%deE]+) ([%+%-%.%deE]+)$') end
+        ax,ay=tonumber(ax),tonumber(ay)
+        if not ax or not ay then show_marker(s,false);return end
+        x,y=(ax-.5)*viewport.X/math.max(s.layout:GetViewportScale(s.pc),.01),(ay-.5)*logical_height
+    end
+    s.reticle_slot:SetPosition(xy(x,y));show_marker(s,true)
     s.aim_updates=(s.aim_updates or 0)+1
 end
+pcall(bridge,'Source','0');pcall(bridge,'Active','false');pcall(bridge,'Target','')
 uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function()
     if not state or retry_time>0 then return end
     stage='per-view firing aim'
@@ -272,8 +278,6 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
         end
         if state and not valid_state(state) then cleanup();scan_time=0 end
         if not pawn or not pawn:get_full_name():find('BP_Player',1,true) then return end
-        local backend=vr:get_mod_value('VR_FarFarReticleReady')
-        if not backend or backend=='' then return end
         if not state then
             scan_time=scan_time+dt;if scan_time<1 then return end;scan_time=0
             local cls=api:find_uobject('WidgetBlueprintGeneratedClass /Game/Interfaces/UI_Player.UI_Player_C')

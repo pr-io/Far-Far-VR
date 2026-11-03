@@ -2,7 +2,7 @@
 
 A community **PCVR mod for Far Far West on Steam**, created by [PR_VR](https://www.youtube.com/@PR_VR). Powered by [UEVR](https://github.com/praydog/UEVR), created by praydog.
 
-**[Download Far Far VR 0.4.4](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.4/FarFarVR-v0.4.4.zip)** Â· [Release notes](https://github.com/pr-io/Far-Far-VR/releases/latest) Â· [VR Buddies Discord](https://discord.gg/PcsYNa6MS9)
+**[Download Far Far VR 0.4.5](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.5/FarFarVR-v0.4.5.zip)** Â· [Release notes](https://github.com/pr-io/Far-Far-VR/releases/latest) Â· [VR Buddies Discord](https://discord.gg/PcsYNa6MS9)
 
 Download the release ZIP above. GitHub's **Code â†’ Download ZIP** contains source code, not the playable mod.
 
@@ -66,7 +66,7 @@ You can also get the complete package from [Releases](https://github.com/pr-io/F
 
 Far Far VR by [PR_VR](https://www.youtube.com/@PR_VR). UEVR by [praydog](https://github.com/praydog/UEVR); upstream compatibility patch by [joeyhodge](https://github.com/joeyhodge/UEVR). Thanks to the [Flat2VR](https://flat2vr.com/) community.
 
-First setup downloads the public [102626_FFR_SWGR_Patch release](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch) directly from upstream and applies the bundled [Far Far VR customization patch](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.4/backend.ffvrdelta). The launcher verifies the exact resulting engine. Complete upstream runtime DLLs are not bundled in the mod ZIP.
+First setup downloads the public [102626_FFR_SWGR_Patch release](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch) directly from upstream and applies the bundled [Far Far VR customization patch](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.5/backend.ffvrdelta). The launcher verifies the exact resulting engine. Complete upstream runtime DLLs are not bundled in the mod ZIP.
 
 Far Far VR is unofficial and is not endorsed by the game developers, Epic Games or the upstream authors. Upstream retains its rights. See [third-party notices](THIRD_PARTY.md) for source links, hashes and licensing information.
 
