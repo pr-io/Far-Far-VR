@@ -319,6 +319,28 @@ internal sealed class Setup
                 if (!File.Exists(targetTex) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(targetTex))) changes.Add((source,targetTex));
             }
         }
+        string uobDir = Path.Combine(AppContext.BaseDirectory, "Profile", "uobjecthook");
+        if (Directory.Exists(uobDir))
+        {
+            foreach (string file in Directory.EnumerateFiles(uobDir, "*.json"))
+            {
+                string target = Path.Combine(ProfileFolder, "uobjecthook", Path.GetFileName(file));
+                if (!File.Exists(target) || !File.ReadAllBytes(file).SequenceEqual(File.ReadAllBytes(target))) changes.Add((file, target));
+            }
+        }
+        string profileDir = Path.Combine(AppContext.BaseDirectory, "Profile");
+        if (Directory.Exists(profileDir))
+        {
+            foreach (string file in Directory.EnumerateFiles(profileDir, "*.json"))
+            {
+                string name = Path.GetFileName(file);
+                if (name.StartsWith("action") || name.StartsWith("binding"))
+                {
+                    string target = Path.Combine(ProfileFolder, name);
+                    if (!File.Exists(target) || !File.ReadAllBytes(file).SequenceEqual(File.ReadAllBytes(target))) changes.Add((file, target));
+                }
+            }
+        }
         if (changes.Count == 0) return;
         var running = Process.GetProcessesByName("FarFarWest-Win64-Shipping");
         bool gameRunning = running.Length > 0;
