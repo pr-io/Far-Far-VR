@@ -143,9 +143,11 @@ local function build(pawn,pc,hud)
         if s.component:get_class():find_function(method) then s.component[method](s.component,false) end
     end
     if s.component:get_class():find_property('BackgroundColor') then s.component.BackgroundColor=native('CoreUObject.LinearColor',{R=0,G=0,B=0,A=0}) end
-    s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=false;s.component:SetWindowFocusable(false)
+    s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=true;s.component:SetWindowFocusable(false)
     if s.component:get_class():find_property('bReceiveHardwareInput') then s.component.bReceiveHardwareInput=false end
     s.component:SetWidget(s.host)
+    pcall(function() s.component:InitWidget() end)
+    pcall(function() s.component:UpdateRenderTarget() end)
     if s.component:get_class():find_function('RequestRenderUpdate') then s.component:RequestRenderUpdate() end
     s.component:RequestRedraw()
     s.token=string.format('%.0f',s.component:get_address());bridge('Source',s.token)

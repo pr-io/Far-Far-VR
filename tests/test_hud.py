@@ -23,7 +23,9 @@ function node(kind)
  function n:GetVisibility()return self.visibility or 0 end
  function n:StopAllAnimations()self.stopped=true end
  function n:RequestRedraw()self.redraws=(self.redraws or 0)+1 end
-  function n:K2_DestroyComponent()self.destroyed=true end
+ function n:InitWidget()self.initialized=true end
+ function n:UpdateRenderTarget()self.render_target_updated=true end
+ function n:K2_DestroyComponent()self.destroyed=true end
  function n:get_address()return 123 end
  n.location={X=0,Y=0,Z=0};n.rotation={Pitch=0,Yaw=0,Roll=0};n.forward={X=1,Y=0,Z=0}
  function n:K2_GetComponentLocation()return self.location end
@@ -85,8 +87,9 @@ class HudTests(unittest.TestCase):
   self.check("""local s=built();assert(component.set_DrawSize.X==256 and component.set_DrawSize.Y==256)
   assert(component.set_RenderInMainPass==false and component.set_RenderInDepthPass==false and component.set_CastShadow==false)
   assert(component.set_VisibleInRayTracing==false and component.set_CollisionEnabled==0 and component.set_WindowFocusable==false)
-  assert(component.BackgroundColor.A==0 and component.bReceiveHardwareInput==false and component.TickWhenOffscreen and component.bManuallyRedraw==false)
-  assert(component.set_Widget==host and not host:IsInViewport() and host.stopped)""")
+  assert(component.BackgroundColor.A==0 and component.bReceiveHardwareInput==false and component.TickWhenOffscreen and component.bManuallyRedraw)
+  assert(component.set_Widget==host and not host:IsInViewport() and host.stopped)
+  assert(component.initialized and component.render_target_updated)""")
  def test_native_material_and_hit_animation_state_are_preserved(self):
   self.check("""local s=built();hud.HitImage.RenderOpacity=.7;hud.HitImage.RenderTransform.Angle=15;update(s,pc,.02)
   assert(s.images[2].clone.set_Brush==hud.HitImage.Brush and s.images[2].clone.set_RenderOpacity==.7)
