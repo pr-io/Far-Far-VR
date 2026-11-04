@@ -44,3 +44,22 @@
 /steam_appid.txt
 /revision.txt
 /UEVRInjector.dll.config
+# Private credentials, machine state and local review material.
+github_token.txt
+*.pem
+*.pfx
+*.p12
+*.key
+id_rsa
+id_ed25519
+*.bak
+*.backup*
+*.pending
+/.ssh/
+/.aws/
+/native-review/
+/release-*-id.txt
+/docs/LOCAL-TESTING.md
+/docs/SIMULATOR-TESTING.md
+/docs/LIVE-SCALE.md
+/docs/LOBBY-FIXES.md

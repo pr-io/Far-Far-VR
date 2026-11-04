@@ -20,7 +20,7 @@ var releasesJson = """
 ]
 """;
 using JsonDocument releases = JsonDocument.Parse(releasesJson);
-Check(UpdateService.CurrentVersion == "0.4.9");
+Check(UpdateService.CurrentVersion == "0.4.10");
 ReleaseUpdate? update = UpdateService.FindUpdate(releases.RootElement, "0.4.1");
 Check(update is { Tag: "v0.4.2", Version: "v0.4.2", Notes: "Fixes and comfort improvements." });
 Check(update!.AssetName == "FarFarVR-v0.4.2.zip" && update.DownloadUrl.Scheme == Uri.UriSchemeHttps);
@@ -29,6 +29,15 @@ using JsonDocument emptyReleases = JsonDocument.Parse("[]");
 Check(UpdateService.FindUpdate(emptyReleases.RootElement, "0.4.0") is null);
 Check(!UpdateService.TryParseVersion("v0.4.invalid", out _));
 Check(!UpdateService.TryParseVersion("v0.4.1-playtest", out _));
+var releaseUrl = new Uri("https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.9/FarFarVR-v0.4.9.zip");
+Check(UpdateService.IsReleaseDownload(releaseUrl, "v0.4.9", "FarFarVR-v0.4.9.zip"));
+foreach (string invalid in new[] {
+    "https://example.com/pr-io/Far-Far-VR/releases/download/v0.4.9/FarFarVR-v0.4.9.zip",
+    "https://github.com/another/repo/releases/download/v0.4.9/FarFarVR-v0.4.9.zip",
+    "http://github.com/pr-io/Far-Far-VR/releases/download/v0.4.9/FarFarVR-v0.4.9.zip",
+    releaseUrl.AbsoluteUri + "?redirect=elsewhere",
+    releaseUrl.AbsoluteUri + "#fragment"
+}) Check(!UpdateService.IsReleaseDownload(new Uri(invalid), "v0.4.9", "FarFarVR-v0.4.9.zip"));
 
 using JsonDocument prereleases=JsonDocument.Parse("""
 [{"tag_name":"v9.0.0","prerelease":true,"assets":[{"name":"FarFarVR-v9.0.0.zip","browser_download_url":"https://github.com/pr-io/Far-Far-VR/releases/download/v9.0.0/FarFarVR-v9.0.0.zip"}]},

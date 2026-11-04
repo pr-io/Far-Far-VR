@@ -216,7 +216,8 @@ internal sealed class UpdateService
                 name.GetString()!.Equals(expectedAsset, StringComparison.Ordinal));
             if (matchingAsset.ValueKind != JsonValueKind.Object ||
                 !matchingAsset.TryGetProperty("browser_download_url", out var url) || url.ValueKind != JsonValueKind.String ||
-                !Uri.TryCreate(url.GetString(), UriKind.Absolute, out Uri? download) || download.Scheme != Uri.UriSchemeHttps)
+                !Uri.TryCreate(url.GetString(), UriKind.Absolute, out Uri? download) ||
+                !IsReleaseDownload(download, tag, expectedAsset))
                 continue;
             string notes = release.TryGetProperty("body", out var body) && body.ValueKind == JsonValueKind.String
                 ? body.GetString() ?? ""
@@ -237,6 +238,11 @@ internal sealed class UpdateService
         return true;
     }
 
+    internal static bool IsReleaseDownload(Uri uri, string tag, string asset) =>
+        uri.Scheme == Uri.UriSchemeHttps && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+        uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0 &&
+        uri.AbsolutePath.Equals($"/{Repository}/releases/download/{tag}/{asset}", StringComparison.Ordinal);
+
     private static Version ParseVersion(string value) =>
         TryParseVersion(value, out Version? version) ? version! : throw new ArgumentException("Invalid launcher version.", nameof(value));
 
@@ -246,7 +252,12 @@ internal sealed class UpdateService
     private HttpRequestMessage CreateRequest(HttpMethod method, Uri uri)
     {
         var request = new HttpRequestMessage(method, uri);
-        string? token = tokenProvider();
+        // A repository token belongs only on the repository API request. Never
+        // send it to an asset URL or a host supplied by release metadata.
+        string? token = uri.Scheme == Uri.UriSchemeHttps && uri.IsDefaultPort &&
+            uri.Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase) &&
+            uri.AbsolutePath.StartsWith($"/repos/{Repository}/", StringComparison.Ordinal)
+            ? tokenProvider() : null;
         if (token is not null)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

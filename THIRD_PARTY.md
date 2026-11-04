@@ -7,7 +7,7 @@ Far Far VR is maintained by **PR_VR** ([YouTube](https://www.youtube.com/@PR_VR)
 - **UEVR:** created by [praydog and contributors](https://github.com/praydog/UEVR).
 - **Upstream compatibility build:** [joeyhodge/UEVR â€” 102626_FFR_SWGR_Patch](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch).
 - **Upstream download:** [uevr.zip](https://github.com/joeyhodge/UEVR/releases/download/102626_FFR_SWGR_Patch/uevr.zip), fetched directly from its publisher by the launcher.
-- **Far Far VR customization delta:** [backend.ffvrdelta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.9/backend.ffvrdelta), applied locally using Windows MSDelta.
+- **Far Far VR customization delta:** [backend.ffvrdelta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.10/backend.ffvrdelta), applied locally using Windows MSDelta.
 - **Maintained source changes:** [engine patch](https://github.com/pr-io/Far-Far-VR/blob/main/Engine/cinema-comfort.patch) and [console compatibility patch](https://github.com/pr-io/Far-Far-VR/blob/main/Engine/farfar-console.patch).
 
 The player ZIP excludes complete `UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.dll` and `openvr_api.dll` binaries. The installer checks the upstream archive, customization delta, reconstructed engine and companion DLLs before completing setup.
@@ -15,8 +15,8 @@ The player ZIP excludes complete `UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.
 | Verified component | SHA-256 |
 | --- | --- |
 | Upstream archive | `FDF325C62BA43BC1DA98ED5F453633FA106CAEF0DF9CB8121566F7AA138F6D55` |
-| Customization delta | `0FD0D657C3844331304E931F3398EA6E41202506F6DD38D405DF30F8EEF41B67` |
-| Installed backend | `E784A9946B924FEDCB7A174473EA6DB784399AE40BCFBB6F2FE94E2DC10096C0` |
+| Customization delta | `137D5107CFEA0EE16E1EAE72CB898BFE66DF57B65CD20D2D3CCF1F82106E4FFA` |
+| Installed backend | `1F01B59710428DA7C510B411EE9BFEC8B1DEB1DB52F369409F93B6C0BBEB1288` |
 
 The upstream engine [license](https://github.com/joeyhodge/UEVR/blob/963b157573eaef20528b602d1d9790b8105819b3/LICENSE) states "All rights reserved." Upstream retains its rights; attribution, public source access and distributing a delta do not grant additional engine rights or establish endorsement. No blanket legal certification or commercial-use permission is claimed.
 

@@ -10,13 +10,22 @@ Use Windows x64 and the .NET 8 SDK:
 dotnet publish Launcher\FarFarWestVR.csproj -c Release -r win-x64 -o Launcher\publish
 ```
 
-The launcher includes its .NET runtime. The release builder also needs the pinned customization delta in the ignored local `Runtime` folder. Obtain the matching [0.4.9 delta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.9/backend.ffvrdelta); its hash is checked by the builder and installer.
+The launcher includes its .NET runtime. The release builder also needs the pinned customization delta in the ignored local `Runtime` folder. Obtain the matching [0.4.10 delta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.10/backend.ffvrdelta); its hash is checked by the builder and installer.
+
+Publisher privacy preparation sanitizes the pinned native candidate before generating its delta. Preserve the original candidate and use a separate output file:
+
+```powershell
+python scripts\Sanitize-RuntimePaths.py --input <pinned-native-candidate> --output <sanitized-backend>
+python scripts\Build-RuntimePatch.py --base <pinned-upstream-backend> --target <sanitized-backend> --output Runtime\backend.ffvrdelta
+```
+
+The sanitizer accepts only its explicitly pinned input, preserves all executable sections and file size, and replaces profile roots only in read-only diagnostic data. A different native build requires deliberate validation and pin updates. Never publish unsanitized local build artifacts.
 
 ```powershell
 pwsh -File scripts\Build-Package.ps1
 ```
 
-Output: `dist/FarFarVR-v0.4.9.zip`. It includes the launcher, player profile, delta, updater helper, documentation, images and SHA-256 manifest. Tests, source checkouts, development reports and complete upstream runtime DLLs are excluded.
+Output: `dist/FarFarVR-v0.4.10.zip`. It includes the launcher, player profile, delta, updater helper, documentation, images and SHA-256 manifest. Tests, source checkouts, development reports and complete upstream runtime DLLs are excluded.
 
 ## Regression checks
 

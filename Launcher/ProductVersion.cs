@@ -1,2 +1,2 @@
 namespace FarFarWestVR;
-internal static class ProductVersion { internal const string Value = "0.4.9"; }
+internal static class ProductVersion { internal const string Value = "0.4.10"; }
