@@ -629,8 +629,11 @@ internal static class NativeLoader
             else if (result == 0xFFFFFFFF) throw new Win32Exception(Marshal.GetLastWin32Error());
             else throw new TimeoutException("VR is taking longer to load. Wait before trying again; the game is still open.");
             if (game.HasExited) throw new InvalidOperationException("The game closed while VR was loading.");
-            if (GameLaunch.LoadedBackend(game) is not string loaded || !Path.GetFullPath(loaded).Equals(Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Windows could not load the VR build. Check the game and launcher logs.");
+            game.Refresh();
+            bool loaded = game.Modules.Cast<ProcessModule>().Any(module =>
+                Path.GetFullPath(module.FileName).Equals(Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase));
+            if (!loaded)
+                throw new InvalidOperationException("Windows could not load " + Path.GetFileName(path) + ". Check the game and launcher logs.");
         }
         finally
         {
