@@ -289,7 +289,7 @@ internal sealed class Setup
             string target = Path.Combine(ProfileFolder, "scripts", name);
             if (!File.Exists(target) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(target))) changes.Add((source,target));
         }
-        foreach (string name in new[] { "farfarvr_controls.png" })
+        foreach (string name in new[] { "farfarvr_controls.png", "farfarvr_controls.jpg" })
         {
             string source = Path.Combine(AppContext.BaseDirectory, "Profile", "textures", name);
             if (File.Exists(source))
