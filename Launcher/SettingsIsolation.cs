@@ -8,29 +8,40 @@ internal sealed class SessionState
     public bool InVrSession { get; set; }
     public int ProcessId { get; set; }
     public DateTime Timestamp { get; set; }
+    public string Phase { get; set; } = "active";
+    public string[] MissingDesktopFiles { get; set; } = [];
 }
 
 internal static class SettingsIsolation
 {
-    public static readonly string GameSavedFolder = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWest", "Saved");
-    public static readonly string GameConfigFolder = Path.Combine(GameSavedFolder, "Config", "Windows");
-    public static readonly string GameSaveGamesFolder = Path.Combine(GameSavedFolder, "SaveGames");
+    public static string GameSavedFolder => Path.Combine(
+        StorageRoot ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWest", "Saved");
+    public static string GameConfigFolder => Path.Combine(GameSavedFolder, "Config", "Windows");
+    public static string GameSaveGamesFolder => Path.Combine(GameSavedFolder, "SaveGames");
 
-    public static readonly string GameIniPath = Path.Combine(GameConfigFolder, "GameUserSettings.ini");
-    public static readonly string GameInputSavePath = Path.Combine(GameSaveGamesFolder, "EnhancedInputUserSettings.sav");
-    public static readonly string GameUserSavePath = Path.Combine(GameSaveGamesFolder, "userSettings.sav");
+    public static string GameIniPath => Path.Combine(GameConfigFolder, "GameUserSettings.ini");
+    public static string GameInputSavePath => Path.Combine(GameSaveGamesFolder, "EnhancedInputUserSettings.sav");
+    public static string GameUserSavePath => Path.Combine(GameSaveGamesFolder, "userSettings.sav");
 
-    public static readonly string LauncherDataFolder = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWestVRLauncher");
-    public static readonly string VrSettingsFolder = Path.Combine(LauncherDataFolder, "vr_settings");
-    public static readonly string DesktopSettingsFolder = Path.Combine(LauncherDataFolder, "desktop_settings");
-    public static readonly string SessionStatePath = Path.Combine(LauncherDataFolder, "session_state.json");
+    public static string LauncherDataFolder => Path.Combine(
+        StorageRoot ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWestVRLauncher");
+    public static string VrSettingsFolder => Path.Combine(LauncherDataFolder, "vr_settings");
+    public static string DesktopSettingsFolder => Path.Combine(LauncherDataFolder, "desktop_settings");
+    public static string SessionStatePath => Path.Combine(LauncherDataFolder, "session_state.json");
 
-    public static string BundledVrSettingsFolder => Path.Combine(AppContext.BaseDirectory, "Profile", "vr_settings");
-    public static string BundledDefaultSettingsFolder => Path.Combine(AppContext.BaseDirectory, "Profile", "default_pc_settings");
+    public static string BundledVrSettingsFolder => Path.Combine(StorageRoot ?? AppContext.BaseDirectory, "Profile", "vr_settings");
+    public static string BundledDefaultSettingsFolder => Path.Combine(StorageRoot ?? AppContext.BaseDirectory, "Profile", "default_pc_settings");
 
     private static readonly object Gate = new();
+    internal static string? StorageRoot { get; set; }
+    internal static Func<bool> GameRunning { get; set; } = DetectGameRunning;
+    private static readonly string[] SettingsNames = ["GameUserSettings.ini", "EnhancedInputUserSettings.sav", "userSettings.sav"];
+    private static string ActivePath(string name) => name.EndsWith(".ini") ? GameIniPath : Path.Combine(GameSaveGamesFolder, name);
+    private static void WriteState(SessionState state)
+    {
+        File.WriteAllText(SessionStatePath + ".pending", JsonSerializer.Serialize(state));
+        File.Move(SessionStatePath + ".pending", SessionStatePath, true);
+    }
 
     public static void EnsureDirectories()
     {
@@ -114,7 +125,7 @@ internal static class SettingsIsolation
                         }
                     }
 
-                    if (!processRunning)
+                    if (!processRunning && !IsGameRunning())
                     {
                         LauncherLog.Write("Previous VR session interrupted; restoring desktop settings.");
                         ExitVrSessionInternal(saveVrEdits: false);
@@ -132,42 +143,31 @@ internal static class SettingsIsolation
     {
         lock (Gate)
         {
+            if (IsGameRunning()) throw new IOException("Close Far Far West before deploying VR settings.");
+            if (File.Exists(SessionStatePath) && !IsInVrSession())
+                throw new IOException("Session recovery information could not be read. Existing desktop backups were preserved.");
+            if (IsInVrSession()) ExitVrSessionInternal(saveVrEdits: false);
             SeedIfMissing();
-
-            // If we are not currently in a VR session, backup the current desktop settings
-            if (!IsInVrSession())
-            {
-                BackupDesktopSettings();
-            }
-
-            // Deploy VR settings to active game folders
-            DeployVrSettings();
-
-            // Repair VR social bindings on the active input save
-            if (File.Exists(GameInputSavePath))
-            {
-                try
-                {
-                    if (SocialBindings.Repair(GameInputSavePath))
-                    {
-                        LauncherLog.Write("Verified VR social gamepad bindings and push-to-talk.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LauncherLog.Write("Note on VR input binding check: " + ex.Message);
-                }
-            }
-
-            // Record session state
-            var state = new SessionState
-            {
-                InVrSession = true,
-                ProcessId = processId,
-                Timestamp = DateTime.UtcNow
+            BackupDesktopSettings();
+            var state = new SessionState {
+                InVrSession = true, ProcessId = processId, Timestamp = DateTime.UtcNow, Phase = "preparing",
+                MissingDesktopFiles = SettingsNames.Where(name => !File.Exists(ActivePath(name))).ToArray()
             };
-            File.WriteAllText(SessionStatePath, JsonSerializer.Serialize(state));
-            LauncherLog.Write($"VR session active (PID={processId}). VR settings and controller bindings deployed.");
+            // Persist recovery information before the first active file changes.
+            WriteState(state);
+            try
+            {
+                DeployVrSettings();
+                if (File.Exists(GameInputSavePath)) SocialBindings.Repair(GameInputSavePath);
+                state.Phase = "active";
+                WriteState(state);
+                LauncherLog.Write($"VR session active (PID={processId}).");
+            }
+            catch
+            {
+                ExitVrSessionInternal(saveVrEdits: false);
+                throw;
+            }
         }
     }
 
@@ -181,7 +181,7 @@ internal static class SettingsIsolation
                 var state = JsonSerializer.Deserialize<SessionState>(File.ReadAllText(SessionStatePath)) ?? new SessionState();
                 state.InVrSession = true;
                 state.ProcessId = processId;
-                File.WriteAllText(SessionStatePath, JsonSerializer.Serialize(state));
+                WriteState(state);
             }
             catch (Exception ex)
             {
@@ -204,7 +204,9 @@ internal static class SettingsIsolation
         }
     }
 
-    internal static bool IsGameRunning()
+    internal static bool IsGameRunning() => GameRunning();
+
+    private static bool DetectGameRunning()
     {
         var processes = Process.GetProcessesByName("FarFarWest-Win64-Shipping");
         bool running = processes.Length > 0;
@@ -214,12 +216,19 @@ internal static class SettingsIsolation
 
     private static void ExitVrSessionInternal(bool saveVrEdits)
     {
-        if (saveVrEdits)
+        var state = JsonSerializer.Deserialize<SessionState>(File.ReadAllText(SessionStatePath))
+            ?? throw new IOException("Session recovery information is missing.");
+        if (saveVrEdits && state.Phase == "active")
         {
-            SaveActiveToVrSettings();
+            try { SaveActiveToVrSettings(); }
+            catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
+            { LauncherLog.Write("VR edits could not be saved; restoring desktop settings: "+ex.Message); }
         }
-
+        state.Phase = "restoring";
+        WriteState(state);
         RestoreDesktopSettings();
+        foreach (string name in state.MissingDesktopFiles)
+            if (SettingsNames.Contains(name)) File.Delete(ActivePath(name));
 
         try
         {
@@ -285,6 +294,8 @@ internal static class SettingsIsolation
         {
             File.Copy(GameUserSavePath, Path.Combine(DesktopSettingsFolder, "userSettings.sav"), true);
         }
+        foreach (string name in SettingsNames)
+            if (!File.Exists(ActivePath(name))) File.Delete(Path.Combine(DesktopSettingsFolder, name));
         LauncherLog.Write("Desktop settings backed up to desktop_settings.");
     }
 
@@ -421,22 +432,14 @@ internal static class SettingsIsolation
     private static void RestoreDesktopSettings()
     {
         EnsureDirectories();
-        string dIni = Path.Combine(DesktopSettingsFolder, "GameUserSettings.ini");
-        string dInput = Path.Combine(DesktopSettingsFolder, "EnhancedInputUserSettings.sav");
-        string dUser = Path.Combine(DesktopSettingsFolder, "userSettings.sav");
-
-        if (File.Exists(dIni))
+        var failures=new List<Exception>();
+        foreach(string name in SettingsNames)
         {
-            File.Copy(dIni, GameIniPath, true);
+            string source=Path.Combine(DesktopSettingsFolder,name);
+            try { if(File.Exists(source)) File.Copy(source,ActivePath(name),true); }
+            catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) { failures.Add(ex); }
         }
-        if (File.Exists(dInput))
-        {
-            File.Copy(dInput, GameInputSavePath, true);
-        }
-        if (File.Exists(dUser))
-        {
-            File.Copy(dUser, GameUserSavePath, true);
-        }
+        if(failures.Count>0) throw new IOException("Desktop settings recovery is incomplete; backups and session information were retained.",new AggregateException(failures));
     }
 
     public static void ResetDesktopToDefault()

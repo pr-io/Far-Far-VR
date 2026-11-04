@@ -9,6 +9,7 @@ from lupa.lua54 import LuaRuntime
 class ComfortTests(unittest.TestCase):
  def setup_lua(self,journal='',persisted_aim='2',persisted_move='1'):
   lua=LuaRuntime()
+  lua.execute("package.path = " + repr(str(ROOT / "Profile/scripts/?.lua").replace("\\", "/")) + " .. ';' .. package.path")
   lua.globals().initial_journal=journal
   lua.globals().persisted_aim=persisted_aim
   lua.globals().persisted_move=persisted_move
@@ -266,5 +267,31 @@ class ComfortTests(unittest.TestCase):
   assert(not files['farfarvr-comfort-status.txt'] and not files['farfarvr-taa-status.txt'])
   assert(files['farfarvr-comfort-restore.txt']~=nil)
   ''')
+
+ def test_menu_preferences_survive_title_and_mount_overrides(self):
+  self.setup_lua().execute("""
+  pc.Pawn=pawn('BP_TitleScreen_C');tick(nil,.1)
+  assert(farfarvr_preferences.get('VR_AimMethod')=='2' and values.VR_AimMethod=='0')
+  farfarvr_preferences.set('VR_AimMethod','3')
+  farfarvr_preferences.set('UI_FollowView','true')
+  assert(values.VR_AimMethod=='0')
+  local queued=false
+  uevr.params.vr.save_config=function() queued=true end
+  farfarvr_preferences.save()
+  assert(queued and values.VR_AimMethod=='0' and values.UI_FollowView=='false')
+  local journal=files['farfarvr-comfort-restore.txt']
+  assert(journal:find('VR_AimMethod=3',1,true) and journal:find('UI_FollowView=true',1,true))
+  pc.Pawn=pawn('BP_Player_C');tick(nil,.1);assert(values.VR_AimMethod=='3')
+  pc.Pawn=pawn('BP_Mount_C');tick(nil,.1)
+  farfarvr_preferences.set('VR_MovementOrientation','3')
+  pc.Pawn=pawn('BP_Player_C');tick(nil,.1);assert(values.VR_MovementOrientation=='3')
+  """)
+ def test_transient_context_error_recovers(self):
+  self.setup_lua().execute("""
+  local original=pc.GetViewTarget;pc.GetViewTarget=function()error('temporary')end
+  tick(nil,.1);pc.GetViewTarget=original;pc.Pawn=pawn('BP_Mount_C')
+  tick(nil,1.1);assert(values.VR_AimMethod=='0')
+  pc.Pawn=pawn('BP_Player_C');tick(nil,.1);assert(values.VR_AimMethod=='2')
+  """)
 
 if __name__=='__main__': unittest.main()

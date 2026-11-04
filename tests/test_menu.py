@@ -63,6 +63,7 @@ print = function(s) table.insert(logs, s) end
 class MenuTests(unittest.TestCase):
     def setUp(self):
         self.lua = LuaRuntime()
+        self.lua.execute("package.path = " + repr(str(ROOT / "Profile/scripts/?.lua").replace("\\", "/")) + " .. ';' .. package.path")
         self.lua.execute(HARNESS)
         self.lua.globals().package.path = str(ROOT / 'Profile/scripts/?.lua').replace('\\','/') + ';' + self.lua.globals().package.path
         for field in json.loads((ROOT / 'Profile/VRSettings.json').read_text()):
@@ -96,19 +97,30 @@ class MenuTests(unittest.TestCase):
     def test_resolution_scale_slider_adjusts_and_saves(self):
         self.check('''events.Display=true; draw(); assert(#writes==0)
             events["Resolution scale"]=0.75; draw()
-            assert(tonumber(values.OpenXR_ResolutionScale)==0.75 and #writes==1 and saves==0)
-            events["Save settings"]=true; draw(); assert(saves==1)
+            assert(tonumber(values.OpenXR_ResolutionScale)==1 and #writes==0 and saves==0)
+            events["Save settings"]=true; draw(); assert(saves==1 and #writes==1 and tonumber(values.OpenXR_ResolutionScale)==0.75)
             events["Resolution scale"]=0.9; draw()
             events["Revert this session's edits"]=true; draw()
             assert(tonumber(values.OpenXR_ResolutionScale)==0.75)''')
 
-    def test_unregistered_runtime_resolution_scale_fallback_and_adjust(self):
+    def test_dragging_resolution_never_reconfigures_before_save(self):
+        self.check('''events.Display=true;draw()
+            for i=1,20 do events['Resolution scale']=.5+i*.025;draw() end
+            assert(#writes==0 and saves==0 and tonumber(values.OpenXR_ResolutionScale)==1)
+            events['Resolution scale']=.8;draw();events['Save settings']=true;draw()
+            assert(#writes==1 and saves==1 and tonumber(values.OpenXR_ResolutionScale)==.8)
+            draw();assert(#writes==1)''')
+
+    def test_revert_discards_unsaved_resolution_without_reconfigure(self):
+        self.check('''events.Display=true;draw();events['Resolution scale']=.7;draw()
+            events["Revert this session's edits"]=true;draw();events['Save settings']=true;draw()
+            assert(#writes==0 and saves==1 and tonumber(values.OpenXR_ResolutionScale)==1)''')
+
+    def test_unavailable_runtime_resolution_is_read_only(self):
         self.check('''values.OpenXR_ResolutionScale=nil
             events.Display=true; draw()
             events["Resolution scale"]=0.75; draw()
-            events["Save settings"]=true; draw(); assert(saves==1)
-            events["Resolution scale"]=0.9; draw()
-            events["Revert this session's edits"]=true; draw()''')
+            assert(#writes==0);assert(table.concat(texts,' '):find('unavailable',1,true))''')
 
     def test_live_edit_and_revert_preserve_other_options(self):
         self.check('''events["Calibration"]=true; draw(); values.Unrelated="kept"; open=true; frame()
@@ -123,10 +135,23 @@ class MenuTests(unittest.TestCase):
             events["Snap turning"]=false; draw()
             events["Revert this session's edits"]=true; draw(); assert(values.VR_SnapTurn=="true")''')
 
-    def test_missing_value_disables_edits(self):
-        self.check('''values.UI_Distance=nil; open=true; frame()
-            events["World scale"]=1.5; draw(); assert(#writes==0 and saves==0)
-            assert(string.find(logs[#logs], "Unavailable setting"))''')
+    def test_missing_value_does_not_disable_other_pages(self):
+        self.check("values.UI_Distance=nil;events.Interface=true;draw();assert(table.concat(texts,' '):find('unavailable',1,true));events.Calibration=true;draw();events['World scale']=1.5;draw();assert(values.VR_WorldScale=='1.5')")
+
+    def test_rejected_resolution_write_does_not_report_success(self):
+        self.check("events.Display=true;draw();ignore_writes=true;events['Resolution scale']=.75;draw();events['Save settings']=true;draw();assert(tonumber(values.OpenXR_ResolutionScale)==1);assert(logs[#logs]:find('did not apply',1,true))")
+
+    def test_controls_diagram_has_one_presentation(self):
+        self.check("local n=0;imgui.draw_controls_image=function()n=n+1 end;events.Controls=true;draw();assert(n==1)")
+
+    def test_update_request_times_out_without_launcher(self):
+        self.check("local now=100;os.time=function()return now end;events.Updates=true;draw();events['Check for Updates']=true;draw();now=131;frame();draw();assert(table.concat(texts,' '):find('No response from the launcher',1,true))")
+
+    def test_old_update_status_cannot_hide_a_request_timeout(self):
+        self.check("local now=100;os.time=function()return now end;files['farfarvr-updates.txt']='state=up-to-date\\nversion=v0.4.7\\nnotes:\\nOld result';events.Updates=true;draw();events['Check for Updates']=true;draw();now=131;frame();draw();draw();assert(table.concat(texts,' '):find('No response from the launcher',1,true))")
+
+    def test_error_does_not_disable_later_valid_edit(self):
+        self.check("events.Calibration=true;draw();events['World scale']=100;draw();events['World scale']=1.25;draw();assert(values.VR_WorldScale=='1.25')")
 
     def test_invalid_input_is_rejected(self):
         self.check('''events["Calibration"]=true; draw(); open=true; frame(); events["World scale"]=100; draw()
@@ -163,49 +188,10 @@ class MenuTests(unittest.TestCase):
             assert(tonumber(values.VR_CameraUpOffset)==0 and values.ButtonMapping=="fixed" and values.VR_AimMethod=="2")
             events["Revert this session's edits"]=true; draw(); assert(tonumber(values.VR_CameraUpOffset)==4.447802)''')
 
-    def test_controls_popup_and_controls_page(self):
-        self.check('''
-            ready = true
-            open = true
-            windows = {}
-            imgui.begin_window = function(name, open_flag, flags)
-                table.insert(windows, name)
-                return true, true
-            end
-            imgui.end_window = function() end
-            imgui.set_next_window_size = function() end
-            drawn_images = 0
-            imgui.draw_controls_image = function(w, h)
-                drawn_images = drawn_images + 1
-            end
-
-            -- Startup stays clear until explicitly requested
-            draw()
-            assert(#windows == 0)
-            assert(drawn_images == 0)
-
-            -- Closing the popup via the button
-            events["Close Controls Diagram"] = true
-            draw()
-            windows = {}
-            draw()
-            assert(#windows == 0)
-
-            -- Navigating to Controls tab allows viewing diagram and reopening popup
-            events["Controls"] = true
-            drawn_images = 0
-            draw()
-            assert(drawn_images >= 1)
-
-            events["Show Controls Popup"] = true
-            draw()
-            assert(#windows >= 1 and windows[#windows] == "Far Far VR - Controls & Bindings")
-        ''')
-
     def test_updates_tab_queues_nonblocking_launcher_commands_and_shows_release_notes(self):
         self.check('''
             events.Updates=true; draw()
-            assert(table.concat(texts,' '):find('Current Version: v0.4.5',1,true))
+            assert(table.concat(texts,' '):find('Current Version: v0.4.7',1,true))
             events['Check for Updates']=true; draw()
             assert(files['farfarvr-update-command.txt']=='check')
             draw()

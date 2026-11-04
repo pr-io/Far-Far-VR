@@ -4,6 +4,7 @@
 -- animation/game ownership; only their viewport paint is suppressed after the
 -- native effects-only compositor layer has acknowledged this private renderer.
 local api,vr=uevr.api,uevr.params.vr
+local health=require('farfarvr_health')
 local state,retry,scan_elapsed=nil,0,0
 local obj_cache = {}
 local function find(path)
@@ -229,7 +230,7 @@ local function sync(s,dt)
     bridge('Active',enabled and active and 'true' or 'false')
     s.redraw=s.redraw+dt
     if s.dirty or (active and s.redraw>=1/60) then s.component:RequestRedraw();s.dirty=false;s.redraw=0 end
-    s.ready=ready;s.active=enabled and active
+    s.ready=ready;s.active=enabled and active; health.set('Effects',ready and 'Active' or 'Original effects (fallback)')
 end
 uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
     retry=math.max(0,retry-dt);if retry>0 then return end
@@ -249,6 +250,6 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
         sync(state,dt)
 
     end)
-    if not ok then cleanup();retry=1;uevr.params.functions.log_error('[Far Far VR Effects] '..tostring(err));fs.write('farfarvr-effects-status.txt','ERROR; original effects restored: '..tostring(err)) end
+    if not ok then health.set('Effects','Recovering; original effects restored');cleanup();retry=1;uevr.params.functions.log_error('[Far Far VR Effects] '..tostring(err));fs.write('farfarvr-effects-status.txt','ERROR; original effects restored: '..tostring(err)) end
 end)
 uevr.sdk.callbacks.on_script_reset(cleanup)

@@ -8,14 +8,22 @@ namespace FarFarWestVR;
 
 internal static class Program
 {
+    internal static readonly int ActivateMessage=(int)RegisterWindowMessage("FarFarVR.Activate.1");
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern uint RegisterWindowMessage(string name);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr FindWindow(string? cls,string title);
+    [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr window,int message,IntPtr wParam,IntPtr lParam);
     [STAThread]
     static void Main(string[] args)
     {
+        if(ExitMonitor.TryRun(args))return;
         LauncherLog.Write($"Launcher opened. executable={Environment.ProcessPath}; corrected runtime={Setup.CurrentBackendHash}; arguments={string.Join(' ', args)}");
         using var instance = new Mutex(true, @"Local\FarFarWestVR.Launcher", out bool first);
-        if (!first) { LauncherLog.Write("Another launcher instance is open; no second launch was started."); return; }
+        if (!first) {
+            PostMessage(FindWindow(null,"Far Far VR"),ActivateMessage,args.Contains("--start")?new IntPtr(1):IntPtr.Zero,IntPtr.Zero);
+            LauncherLog.Write("Forwarded request to the open launcher.");return;
+        }
         try { if (UpdateService.StartPendingApply(args)) return; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
         {
             LauncherLog.Write("Pending update could not be started: " + ex);
             MessageBox.Show(ex.Message, "Far Far VR update", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -34,7 +42,9 @@ internal static class Program
             runtimeOverride = Path.GetFullPath(args[runtimeIndex + 1]);
         }
         Setup.UsePreviewPreferences = runtimeOverride != null;
-        Application.Run(new LauncherForm(runtimeOverride));
+        var form=new LauncherForm(runtimeOverride);
+        if(args.Contains("--start"))form.Shown+=(_,_)=>form.RequestStart();
+        Application.Run(form);
     }
 }
 
@@ -202,10 +212,23 @@ internal sealed class LauncherForm : Form
         Controls.Add(footer);
         Controls.AddRange([start,options,progress,log]);
         sessionTimer.Tick+=(_,_)=>{PollSession();PollUpdateCommand();};sessionTimer.Start();
-        FormClosing += (_, _) => { closing = true; cancellation?.Cancel(); sessionTimer.Stop(); SettingsIsolation.ExitVrSession(); };
-        FormClosed += (_,_)=>sessionTimer.Dispose();
+        FormClosing += (_, _) => { closing = true; cancellation?.Cancel(); sessionTimer.Stop(); try { SettingsIsolation.ExitVrSession(); } catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) { LauncherLog.Write("Settings recovery pending: "+ex.Message); } };
+        FormClosed += (_,_)=>{sessionTimer.Dispose();LauncherLog.Write("Launcher window closed; exiting process.");Environment.Exit(0);};
     }
 
+    internal void RequestStart() {
+        if(closing)return;Show();WindowState=FormWindowState.Normal;Activate();
+        if(sessionProcess!=null){SetMenuVisible(false);return;}
+        if(cancellation!=null)return;
+        _=LaunchAsync();
+    }
+    protected override void WndProc(ref Message message) {
+        if(message.Msg==Program.ActivateMessage){
+            if(message.WParam!=IntPtr.Zero)RequestStart();else{Show();WindowState=FormWindowState.Normal;Activate();}
+            return;
+        }
+        base.WndProc(ref message);
+    }
     private async Task LaunchAsync()
     {
         cancellation = new CancellationTokenSource();
@@ -217,7 +240,6 @@ internal sealed class LauncherForm : Form
         var updates = new Progress<string>(message => { if (!closing) status.Text = message; LauncherLog.Write(message); });
         try
         {
-            SettingsIsolation.EnterVrSession();
             int processId=await Task.Run(
                 () => GameLaunch.RunAsync(setup, updates, token, SettingsIsolation.UpdateSessionProcessId),
                 token);
@@ -246,7 +268,12 @@ internal sealed class LauncherForm : Form
             cancellation = null;
             if (!closing && sessionProcess==null)
             {
-                if (!SettingsIsolation.IsGameRunning()) SettingsIsolation.ExitVrSession();
+                if (!SettingsIsolation.IsGameRunning())
+                {
+                    try { SettingsIsolation.ExitVrSession(); }
+                    catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
+                    { LauncherLog.Write("Settings recovery pending: "+ex.Message); status.Text=ex.Message; }
+                }
                 TopMost=false;start.Enabled=true;options.Enabled=true;start.Text="START IN VR";progress.Visible=false;
             }
             else if(!closing) PollSession();
@@ -292,7 +319,7 @@ internal sealed class LauncherForm : Form
     private void PollUpdateCommand()
     {
         if (updateTask is { IsCompleted: false }) return;
-        string commandPath = Path.Combine(Setup.ProfileFolder, "farfarvr-update-command.txt");
+        string commandPath = UpdateService.CommandPath(Setup.ProfileFolder);
         string command;
         try
         {
@@ -332,10 +359,16 @@ internal sealed class LauncherForm : Form
     });
     private void EndSession()
     {
-        SettingsIsolation.ExitVrSession();
+        try { SettingsIsolation.ExitVrSession(); }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
+        { LauncherLog.Write("Settings recovery pending: "+ex.Message); status.Text=ex.Message; return; }
+        if(SettingsIsolation.IsInVrSession()) {
+            status.Text="Finishing game shutdown and restoring desktop settings…";
+            return; // Poll again after the process list releases the exiting game.
+        }
         sessionProcess=null;session=null;handedOff=false;TopMost=false;
-        status.Text="Your game has closed. Ready for your next session.";
-        start.Enabled=true;start.Text="START IN VR";options.Enabled=true;options.Text="Settings";progress.Visible=false;
+        LauncherLog.Write("Game session ended; closing launcher to release the Steam shortcut session.");
+        Close();
     }
 
 }
@@ -390,20 +423,37 @@ internal static class GameLaunch
         }
 
         Process? game = FindGame(GamePath);
+        if (game != null && (!SettingsIsolation.IsInVrSession() || LoadedBackend(game) is not string existing || !SamePath(existing, BackendPath)))
+        {
+            game.Dispose();
+            throw new IOException("Close Far Far West before starting a new VR session. Your settings were left unchanged.");
+        }
         if (game == null)
         {
+            token.ThrowIfCancellationRequested();
+            SettingsIsolation.EnterVrSession();
             status.Report("Starting Far Far West through Steam…");
-            using var activation = Process.Start(new ProcessStartInfo("steam://rungameid/3124540") { UseShellExecute = true });
+            var steamRoot=Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam","SteamPath",null) as string;
+            var steamLog=string.IsNullOrWhiteSpace(steamRoot)?null:new SteamLaunchLog(steamRoot);
+            using var steamAtLaunch=Process.GetProcessesByName("steam").FirstOrDefault();
+            if(string.IsNullOrWhiteSpace(steamRoot)||!File.Exists(Path.Combine(steamRoot,"steam.exe")))
+                throw new IOException("Steam could not be found. Open Steam, then try again.");
+            using var activation=Process.Start(new ProcessStartInfo("steam://rungameid/3124540"){UseShellExecute=true});
             var deadline = DateTime.UtcNow.AddSeconds(150);
             while (game == null && DateTime.UtcNow < deadline)
             {
                 await Task.Delay(700, token);
                 game = FindGame(GamePath);
+                if(game==null&&steamLog?.Refused()==true)
+                    throw new IOException("Steam refused to start Far Far West. If it still holds the previous session, restart Steam, then press START IN VR again.");
+                if(game==null&&steamAtLaunch!=null&&steamAtLaunch.HasExited)
+                    throw new IOException("Steam restarted during launch. Press START IN VR to try again.");
             }
             if (game == null) throw new TimeoutException("The game did not start. Open Steam, then try again.");
         }
 
         onGameFound(game.Id);
+        ExitMonitor.Start(game,GamePath,GameLog);
         using (game)
         {
             LauncherLog.Write($"Target PID={game.Id}; started={game.StartTime:O}");

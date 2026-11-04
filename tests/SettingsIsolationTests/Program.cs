@@ -76,3 +76,58 @@ void Check(bool condition)
 {
     if (!condition) throw new Exception("Settings isolation test failed.");
 }
+// Exercise the production settings lifecycle against isolated folders.
+string lifecycleRoot = Path.Combine(Path.GetTempPath(), "farfarvr-lifecycle-" + Guid.NewGuid().ToString("N"));
+try
+{
+    SettingsIsolation.StorageRoot = lifecycleRoot;
+    SettingsIsolation.GameRunning = () => false;
+    SettingsIsolation.EnsureDirectories();
+    Directory.CreateDirectory(SettingsIsolation.BundledVrSettingsFolder);
+    File.WriteAllText(Path.Combine(SettingsIsolation.BundledVrSettingsFolder,"GameUserSettings.ini"), "[ScalabilityGroups]\nsg.ShadowQuality=0\n[/Script/Engine.GameUserSettings]\nbUseVSync=False\n");
+    string desktop = "[ScalabilityGroups]\nsg.ShadowQuality=3\n[/Script/Engine.GameUserSettings]\nbUseVSync=True\nResolutionSizeX=2560\n";
+    File.WriteAllText(SettingsIsolation.GameIniPath, desktop);
+    SettingsIsolation.EnterVrSession();
+    Check(SettingsIsolation.IsInVrSession());
+    Check(File.ReadAllText(SettingsIsolation.GameIniPath).Contains("sg.ShadowQuality=0"));
+    Check(File.ReadAllText(SettingsIsolation.GameIniPath).Contains("ResolutionSizeX=2560"));
+    SettingsIsolation.ExitVrSession();
+    Check(File.ReadAllText(SettingsIsolation.GameIniPath)==desktop && !File.Exists(SettingsIsolation.SessionStatePath));
+
+    // Running game must be rejected before any backup or deployment.
+    SettingsIsolation.GameRunning=()=>true;
+    bool refused=false;
+    try { SettingsIsolation.EnterVrSession(); } catch(IOException) { refused=true; }
+    Check(refused && File.ReadAllText(SettingsIsolation.GameIniPath)==desktop && !File.Exists(SettingsIsolation.SessionStatePath));
+    SettingsIsolation.GameRunning=()=>false;
+
+    // Startup failure after graphics deployment restores the prior files.
+    File.WriteAllBytes(Path.Combine(SettingsIsolation.VrSettingsFolder,"EnhancedInputUserSettings.sav"),[0,1,2]);
+    File.WriteAllBytes(SettingsIsolation.GameInputSavePath,[8,9]);
+    bool failed=false;
+    try { SettingsIsolation.EnterVrSession(); } catch(IOException) { failed=true; }
+    Check(failed && File.ReadAllText(SettingsIsolation.GameIniPath)==desktop);
+    Check(File.ReadAllBytes(SettingsIsolation.GameInputSavePath).SequenceEqual(new byte[]{8,9}));
+    Check(!SettingsIsolation.IsInVrSession());
+    File.Delete(Path.Combine(SettingsIsolation.VrSettingsFolder,"EnhancedInputUserSettings.sav"));
+    File.Delete(SettingsIsolation.GameInputSavePath);
+
+    // Simulate process interruption after deployment, then execute startup recovery.
+    SettingsIsolation.EnterVrSession();
+    SettingsIsolation.EnsureDesktopState();
+    Check(File.ReadAllText(SettingsIsolation.GameIniPath)==desktop && !SettingsIsolation.IsInVrSession());
+
+    // Nonexistence is part of the desktop snapshot and is restored exactly.
+    File.Delete(SettingsIsolation.GameIniPath);
+    SettingsIsolation.EnterVrSession();
+    Check(File.Exists(SettingsIsolation.GameIniPath));
+    SettingsIsolation.ExitVrSession();
+    Check(!File.Exists(SettingsIsolation.GameIniPath));
+}
+finally
+{
+    SettingsIsolation.StorageRoot=null;
+    SettingsIsolation.GameRunning=()=>System.Diagnostics.Process.GetProcessesByName("FarFarWest-Win64-Shipping").Length>0;
+    if(Directory.Exists(lifecycleRoot))Directory.Delete(lifecycleRoot,true);
+}
+Console.WriteLine("Production lifecycle: start, exit, running-game guard, partial failure, interruption and absent-file recovery passed.");

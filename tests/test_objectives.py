@@ -9,6 +9,7 @@ from lupa.lua54 import LuaRuntime
 class ObjectiveTests(unittest.TestCase):
     def setUp(self):
         self.lua=LuaRuntime()
+        self.lua.execute("package.path = " + repr(str(ROOT / "Profile/scripts/?.lua").replace("\\", "/")) + " .. ';' .. package.path")
         self.lua.execute('''
         uevr={api={find_uobject=function() return {} end},params={vr={}},sdk={callbacks={
           on_post_engine_tick=function(fn) tick=fn end,on_script_reset=function() end,
@@ -84,5 +85,16 @@ class ObjectiveTests(unittest.TestCase):
         uevr.params.vr.get_mod_value=function(_,key) assert(key=='VR_2DScreenMode'); return 'true' end
         render_markers({supported=true,head={K2_GetComponentLocation=function() error('cinema markers must stay hidden') end}})
         ''')
+
+    def test_expired_marker_entries_are_pruned(self):
+        self.lua.execute("""
+        local prune=capture(capture(tick,'update'),'prune')
+        UEVR_UObjectHook={exists=function(o)return o.valid~=false end}
+        local wrapper={RemoveFromParent=function(self)self.removed=true end}
+        local component={valid=false}
+        local widget={RemoveFromParent=function(self)self.removed=true end}
+        local s={items={{component=component,widget=widget,wrapper=wrapper}}}
+        prune(s);assert(#s.items==0 and wrapper.removed and widget.removed)
+        """)
 
 if __name__=='__main__': unittest.main()

@@ -2,6 +2,8 @@
 -- Powered by UEVR created by praydog
 -- Context-specific comfort, with recovery if UEVR saves during an override.
 local api,vr=uevr.api,uevr.params.vr
+local health=require('farfarvr_health')
+local retry=0
 local saved,mode,fault=nil,'gameplay',nil
 local journal='farfarvr-comfort-restore.txt'
 local allowed={VR_MovementOrientation=true,VR_AimMethod=true,UI_FollowView=true,VR_DecoupledPitchUIAdjust=true,VR_2DScreenMode=true,VR_RoomscaleMovement=true,VR_NativeStereoFix=true,VR_DecoupledPitch=true}
@@ -42,6 +44,22 @@ local function restore()
     for key,value in pairs(saved) do vr.set_mod_value(key,value) end
     saved=nil; mode='gameplay'
 end
+_G.farfarvr_preferences={
+    handles=function(key) return allowed[key]==true end,
+    get=function(key) if saved and saved[key]~=nil then return saved[key] end; return vr:get_mod_value(key) end,
+    set=function(key,value)
+        assert(allowed[key],'Unknown preference')
+        baseline[key]=value
+        if saved and saved[key]~=nil then saved[key]=value else vr.set_mod_value(key,value) end
+        checkpoint()
+    end,
+    save=function()
+        -- UEVR serializes on a later frame. The native save boundary applies
+        -- this validated journal without changing effective camera values.
+        checkpoint()
+        vr.save_config()
+    end
+}
 local camera_class
 local function flag(obj,key)
     return obj~=nil and obj:get_class():find_property(key)~=nil and obj[key]==true
@@ -73,11 +91,13 @@ local function update(pc)
     local next_mode=context(pc)
     if next_mode==mode then
         if mode=='gameplay' and snapshot_baseline() then checkpoint() end
+        health.set('Comfort',mode)
         return
     end
     restore()
     snapshot_baseline()
     mode=next_mode
+    health.set('Comfort',mode)
     if mode~='gameplay' then
         saved={VR_AimMethod=vr:get_mod_value('VR_AimMethod')}
         if mode=='riding' then saved.VR_MovementOrientation=vr:get_mod_value('VR_MovementOrientation') end
@@ -151,11 +171,12 @@ local function update_taa()
     else restore_taa(); taa_status='Original AA scaling' end
 end
 uevr.sdk.callbacks.on_pre_engine_tick(function(_,dt)
-    if fault then return end
+    retry=math.max(0,retry-(dt or .016)); if retry>0 then return end
+    fault=nil
     local ok,err=pcall(function()
         update(api:get_player_controller(0))
         -- A rejected graphics CVar must not disable camera/context handling.
-        taa_retry=math.max(0,taa_retry-dt)
+        taa_retry=math.max(0,taa_retry-(dt or .016))
         if taa_retry==0 then
             local taa_ok,taa_error=pcall(update_taa)
             if not taa_ok then
@@ -168,10 +189,10 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(_,dt)
         end
 
     end)
-    if not ok then fault=tostring(err); restore(); restore_taa(); fs.write('farfarvr-comfort-status.txt','ERROR: '..fault) end
+    if not ok then fault=tostring(err); pcall(restore); pcall(restore_taa); retry=1; health.set('Comfort','Recovering: '..fault); pcall(fs.write,'farfarvr-comfort-status.txt','ERROR: '..fault) end
 end)
 uevr.sdk.callbacks.on_post_engine_tick(function()
-    if fault then return end
+    if retry>0 then return end
     local ok,err=pcall(function()
         update(api:get_player_controller(0))
         -- Game settings/camera effects can rewrite CVars during Tick. Recheck
@@ -187,11 +208,12 @@ uevr.sdk.callbacks.on_post_engine_tick(function()
             end
         end
     end)
-    if not ok then fault=tostring(err); restore(); restore_taa(); fs.write('farfarvr-comfort-status.txt','ERROR after tick: '..fault) end
+    if not ok then fault=tostring(err); pcall(restore); pcall(restore_taa); retry=1; health.set('Comfort','Recovering: '..fault); pcall(fs.write,'farfarvr-comfort-status.txt','ERROR after tick: '..fault) end
 end)
 uevr.sdk.callbacks.on_script_reset(function()
     restore()
     restore_taa()
     for key,value in pairs(baseline) do vr.set_mod_value(key,value) end
     checkpoint()
+    _G.farfarvr_preferences=nil
 end)

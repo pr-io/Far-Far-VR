@@ -1,0 +1,1 @@
+File.WriteAllText(args[1],args[0]=="complete"?"[2026.11.03-22.35.43:169][836]LogExit: Exiting.\n[2026.11.03-22.35.43:194][836]Log file closed, 11/03/26":"[2026.11.03-22.35.43:169][836]LogExit: Exiting.");Thread.Sleep(Timeout.Infinite);

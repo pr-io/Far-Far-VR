@@ -58,7 +58,8 @@ end
 '''
 class EffectsTests(unittest.TestCase):
  def setUp(self):
-  self.lua=LuaRuntime();self.lua.execute(HARNESS)
+  self.lua=LuaRuntime()
+  self.lua.execute("package.path = " + repr(str(ROOT / "Profile/scripts/?.lua").replace("\\", "/")) + " .. ';' .. package.path");self.lua.execute(HARNESS)
   self.lua.execute((ROOT/'Profile/scripts/farfarvr_effects.lua').read_text(encoding='utf-8'))
   self.lua.execute("sync=capture(tick,'sync'); cleanup=capture(tick,'cleanup'); build=capture(tick,'build'); scan=capture(tick,'scan'); capture_image=capture(scan,'capture'); damage_position=capture(sync,'damage_position')")
  def check(self,s):self.lua.execute(s)

@@ -2,6 +2,13 @@
 import json
 from pathlib import Path
 root = Path(__file__).resolve().parents[1]
+version = (root / 'version.txt').read_text().strip()
+(root / 'Profile/scripts/farfarvr_version.lua').write_text('return '+json.dumps('v'+version)+'\n')
+(root / 'Launcher/ProductVersion.cs').write_text('namespace FarFarWestVR;\ninternal static class ProductVersion { internal const string Value = '+json.dumps(version)+'; }\n')
+for name in ['README.md','BUILD.md']:
+    path=root/name
+    import re
+    path.write_text(re.sub(r'0\.4\.\d+',version,path.read_text(encoding='utf-8-sig')),encoding='utf-8')
 catalog = json.loads((root / 'Profile/VRSettings.json').read_text())
 def lua(value):
     if isinstance(value, dict): return '{' + ','.join('['+json.dumps(k)+']='+lua(v) for k,v in value.items()) + '}'

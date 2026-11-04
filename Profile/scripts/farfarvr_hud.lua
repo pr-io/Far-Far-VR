@@ -2,7 +2,9 @@
 -- Powered by UEVR created by praydog
 -- Original animated artwork follows the firing ray using the accepted per-view renderer.
 local api,vr=uevr.api,uevr.params.vr
+local health=require('farfarvr_health')
 local state,fault,last_pawn,title_camera,title_location,title_owner
+local possessed_pawn
 local scan_time=0
 local retry_time,stage=0,'startup'
 local recover_hud
@@ -48,9 +50,9 @@ local function copy_layout(slot)
         Anchors={Minimum={X=l.Anchors.Minimum.X,Y=l.Anchors.Minimum.Y},Maximum={X=l.Anchors.Maximum.X,Y=l.Anchors.Maximum.Y}},
         Alignment={X=l.Alignment.X,Y=l.Alignment.Y}})
 end
-local function bridge(key,value) vr.set_mod_value('VR_FarFarReticle'..key,value) end
+local function clear_aim() vr.set_mod_value('VR_FarFarGunAimTarget','') end
 local function cleanup()
-    pcall(bridge,'Source','0');pcall(bridge,'Active','false');pcall(bridge,'Target','')
+    pcall(clear_aim)
     local s=state;state=nil;if not s then return end
     for _,item in ipairs(s.images or {}) do
         if alive(item.source) and alive(item.parent) then pcall(function()
@@ -139,7 +141,7 @@ local function build(pawn,pc,hud)
         end
     end
     assert(#s.images>0,'No original reticle artwork found');sync_images(s)
-    fault=nil;log('Restored per-view firing-ray renderer for crosshair, hit X and hands; no offscreen target or readiness handshake.')
+    health.set('HUD','Active'); fault=nil;log('Restored per-view firing-ray renderer for crosshair, hit X and hands; no offscreen target or readiness handshake.')
 end
 local function valid_state(s)
     if not alive(s.hud) or not s.hud:IsInViewport() or s.hud.WidgetTree.RootWidget~=s.root or not alive(s.canvas) or not alive(s.reticle) or not alive(s.head) or not alive(s.hand) then return false end
@@ -177,6 +179,9 @@ local function render_aim(s)
             end
         end
     end
+    local aim_method=tonumber(vr:get_mod_value('VR_AimMethod')) or 2
+    local hand_index=(aim_method==3 or aim_method==5) and 0 or 1
+    if s.hand_index~=hand_index then UEVR_UObjectHook.get_or_add_motion_controller_state(s.hand):set_hand(hand_index); s.hand_index=hand_index end
     local drawn=false
     if alive(item) and not is_empty then
         local has_drawn_prop=false
@@ -222,6 +227,7 @@ local function render_aim(s)
     if vr:get_mod_value('UI_FollowView')~='true' or vr:get_mod_value('UI_OverlayType')~='0' then
         -- Use the existing native surface projection when the HUD is locked.
         -- Its coordinates run from 0 to 1 across the actual UI surface.
+        vr.set_mod_value('VR_FarFarGunAimTarget',string.format('%.9g %.9g %.9g',right,up,-forward))
         local aim=vr:get_mod_value('VR_FarFarGunAim')
         local ax,ay
         if type(aim)=='string' then ax,ay=aim:match('^([%+%-%.%deE]+) ([%+%-%.%deE]+)$') end
@@ -232,17 +238,17 @@ local function render_aim(s)
     s.reticle_slot:SetPosition(xy(x,y));show_marker(s,true)
     s.aim_updates=(s.aim_updates or 0)+1
 end
-pcall(bridge,'Source','0');pcall(bridge,'Active','false');pcall(bridge,'Target','')
+pcall(clear_aim)
 uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function()
     if not state or retry_time>0 then return end
     stage='per-view firing aim'
     local ok,err=pcall(render_aim,state)
     if not ok then
-        pcall(bridge,'Target','');recover_hud(err)
+        pcall(clear_aim);recover_hud(err)
     end
 end)
 recover_hud=function(err)
-    fault=stage..': '..tostring(err);pcall(cleanup);pcall(restore_title);last_pawn=nil;scan_time=0;retry_time=1
+    health.set('HUD','Recovering'); fault=stage..': '..tostring(err);pcall(cleanup);pcall(restore_title);last_pawn=nil;scan_time=0;retry_time=1
     uevr.params.functions.log_error('[Far Far VR HUD] Rebuilding private gun layer after '..fault)
     fs.write('farfarvr-hud-status.txt','ERROR in independent gun layer: '..fault)
 end
@@ -267,15 +273,15 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
     local ok,err=pcall(function()
         stage='player/context';local pc=api:get_player_controller(0);if not pc then return end
         local pawn=pc.Pawn;title_height(pawn)
-        if pawn~=last_pawn then
-            cleanup()
-            -- A newly possessed lobby pawn establishes the game's forward direction.
-            -- Recenter rotation once here; preserve height and all gun targeting.
+        -- HUD recovery can clear last_pawn without changing possession.
+        -- Only a real possession transition may establish lobby forward.
+        if pawn~=possessed_pawn then
+            possessed_pawn=pawn
             if pawn and pawn:get_full_name():find('BP_Player_Lobby',1,true) then
                 if vr.recenter_view then pcall(vr.recenter_view) end
             end
-            last_pawn=pawn;scan_time=0
         end
+        if pawn~=last_pawn then cleanup();last_pawn=pawn;scan_time=0 end
         if state and not valid_state(state) then cleanup();scan_time=0 end
         if not pawn or not pawn:get_full_name():find('BP_Player',1,true) then return end
         if not state then

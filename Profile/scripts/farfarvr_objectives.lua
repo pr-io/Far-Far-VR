@@ -4,6 +4,8 @@
 -- the HMD and the actual UEVR compositor quad, independently of weapon aiming.
 local api,vr=uevr.api,uevr.params.vr
 local state,last_pawn,fault
+local retry=0
+local health=require('farfarvr_health')
 local scan_time=0
 local obj_cache = {}
 local function find(path)
@@ -109,6 +111,17 @@ local function adopt(s)
         end
     end
 end
+local function prune(s)
+    for i=#s.items,1,-1 do
+        local item=s.items[i]
+        if not alive(item.component) or not alive(item.widget) then
+            if alive(item.component) then pcall(function() item.component.WidgetClass=item.widget_class end) end
+            if alive(item.widget) then pcall(function() item.widget:RemoveFromParent() end) end
+            if alive(item.wrapper) then pcall(function() item.wrapper:RemoveFromParent() end) end
+            table.remove(s.items,i)
+        end
+    end
+end
 local function update(s,dt)
     s.scan=s.scan+dt; s.settings=s.settings+dt
     if s.settings>=1 then
@@ -121,7 +134,7 @@ local function update(s,dt)
         local viewport=s.layout:GetViewportSize(s.pc)
         s.logical_height=viewport.Y/math.max(s.layout:GetViewportScale(s.pc),.01)
     end
-    if s.scan>=1 then s.scan=0; adopt(s) end
+    if s.scan>=1 then s.scan=0; prune(s); adopt(s) end
     local visible=s.supported and vr.is_runtime_ready() and vr:get_mod_value('VR_2DScreenMode')~='true' and (not s.pc or not s.pc.bShowMouseCursor) and not uevr.params.functions.is_drawing_ui()
     s.canvas:SetVisibility(visible and 4 or 2)
     if not visible then return end
@@ -145,12 +158,12 @@ local function render_markers(s)
     s.updates=s.updates+1
 end
 uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function()
-    if fault or not state then return end
+    if retry>0 or not state then return end
     local ok,err=pcall(function() render_markers(state) end)
-    if not ok then fault=tostring(err); cleanup(); fs.write('farfarvr-objectives-status.txt','ERROR in view update: '..fault) end
+    if not ok then fault=tostring(err); pcall(cleanup); retry=1; health.set('Objectives','Recovering: '..fault); pcall(fs.write,'farfarvr-objectives-status.txt','ERROR in view update: '..fault) end
 end)
 uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
-    if fault then return end
+    retry=math.max(0,retry-(dt or .016)); if retry>0 then return end
     local ok,err=pcall(function()
         local pc=api:get_player_controller(0)
         local pawn=pc and pc.Pawn
@@ -165,9 +178,9 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
             scan_time=0
             build(pawn,pc) -- lobby and mounted HUDs need no UI_Player dependency
         end
-        if state then update(state,dt) end
+        if state then update(state,dt); health.set('Objectives','Active') end
 
     end)
-    if not ok then fault=tostring(err); cleanup(); fs.write('farfarvr-objectives-status.txt','ERROR: '..fault) end
+    if not ok then fault=tostring(err); pcall(cleanup); retry=1; health.set('Objectives','Recovering: '..fault); pcall(fs.write,'farfarvr-objectives-status.txt','ERROR: '..fault) end
 end)
 uevr.sdk.callbacks.on_script_reset(cleanup)

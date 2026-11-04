@@ -3,6 +3,8 @@
 -- Keep flat-game horse orbit/tilt separate from UEVR's tracked head looking.
 local api=uevr.api
 local state,fault=nil,nil
+local retry=0
+local health=require('farfarvr_health')
 local function alive(o) return o~=nil and UEVR_UObjectHook.exists(o) end
 local rotator_struct
 local function rot(p,y,r)
@@ -57,11 +59,12 @@ local function update(pc)
     s.camera:K2_SetRelativeRotation(rot(0,s.camera_rotation.Yaw,0),false,{},true)
 end
 local function step(dt)
-    if fault then return end
+    retry=math.max(0,retry-(dt or 0)); if retry>0 then return end
     local ok,err=pcall(function()
         update(api:get_player_controller(0))
     end)
-    if not ok then fault=tostring(err); restore(); fs.write('farfarvr-mount-status.txt','ERROR: '..fault) end
+    if not ok then fault=tostring(err); pcall(restore); retry=1; health.set('Mount','Recovering: '..fault); pcall(fs.write,'farfarvr-mount-status.txt','ERROR: '..fault)
+    else fault=nil; health.set('Mount',state and 'Active' or 'Ready') end
 end
 uevr.sdk.callbacks.on_pre_engine_tick(function(_,dt) step(dt) end)
 uevr.sdk.callbacks.on_post_engine_tick(function() step(0) end)

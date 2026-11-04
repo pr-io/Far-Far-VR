@@ -15,6 +15,17 @@ int main(){
  auto e=gun_reticle_project(s,glm::vec3{s.pose[3]}+head_rotation*glm::vec3{.4f,0,2},head_rotation,head_position,head_rotation);
  assert(e.valid&&std::abs(e.x-b.x)<.001f);
  assert(!gun_reticle_project(s,glm::vec3{s.pose[3]}+head_rotation*glm::vec3{3,0,2},head_rotation,head_position,head_rotation).valid);
+ // Head-local firing endpoints support either hand and head aiming.
+ s.view_space=true;s.pose=glm::mat4{1};s.pose[3]=glm::vec4{0,0,-2,1};
+ const auto center=firing_point_project(s,{0,0,-2.75f},{},identity);
+ const auto left=firing_point_project(s,{-.3f,.1f,-2.75f},{},identity);
+ const auto right=firing_point_project(s,{.3f,.1f,-2.75f},{},identity);
+ assert(center.valid&&std::abs(center.x-.5f)<.001f);
+ assert(left.valid&&right.valid&&left.x<center.x&&right.x>center.x&&left.y<.5f);
+ const auto moved=firing_point_project(s,{.3f,.1f,-2.75f},head_position,head_rotation);
+ assert(moved.valid&&std::abs(moved.x-right.x)<.001f&&std::abs(moved.y-right.y)<.001f);
+ assert(!firing_point_project(s,{0,0,0},{},identity).valid);
+ s.view_space=false;
  record_reticle_surface(s.pose,2,1,false);const auto saved=read_reticle_surface();assert(saved.updated>0&&saved.width==2&&!saved.view_space);
  std::cout<<"Gun-only aim, head movement, fixed/following HUD, off-panel suppression and surface capture passed\n";
 }

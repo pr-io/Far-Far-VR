@@ -15,7 +15,7 @@ internal sealed class Setup
     public bool CloseAfterLaunch { get; set; } = false;
     public const string ShippingRelative = @"FarFarWest\Binaries\Win64\FarFarWest-Win64-Shipping.exe";
     internal static bool UsePreviewPreferences { get; set; }
-    internal const string CurrentBackendHash = "2F30D9353B02435F0D34A6505D2FF494F4DACD20783F8D72CB408F9AEBE41558";
+    internal const string CurrentBackendHash = "6B4081352D2E23061F87C3086FDEE84A857682E95EAEB8A016C4C9BD7357B341";
     internal const string BaseBackendHash = "FEFF6417359F6E36ABAC6577598A86B96D485A023A850F8614043AA0A508C8CB";
     internal static readonly string[] CompatibleBackendHashes = new[]
     {
@@ -148,7 +148,7 @@ internal sealed class Setup
         {
             using (var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
             {
-                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FarFarVR-Launcher/0.4.5 (PR_VR)");
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("FarFarVR-Launcher (PR_VR)");
                 using var response = await httpClient.GetAsync(UevrRuntimeDownloadUrl, HttpCompletionOption.ResponseHeadersRead, token);
                 response.EnsureSuccessStatusCode();
 
@@ -282,20 +282,18 @@ internal sealed class Setup
     private static void EnsureMenuModule()
     {
         var changes = new List<(string Source, string Target)>();
-        foreach (string name in new[] { "farfarvr_settings.lua", "farfarvr_menu.lua", "farfarvr_input.lua", "farfarvr_hud.lua", "farfarvr_objectives.lua", "farfarvr_comfort.lua", "farfarvr_mount.lua", "farfarvr_effects.lua", "farfarvr_render_fix.lua" })
+        foreach (string name in new[] { "farfarvr_settings.lua", "farfarvr_version.lua", "farfarvr_health.lua", "farfarvr_menu.lua", "farfarvr_input.lua", "farfarvr_hud.lua", "farfarvr_objectives.lua", "farfarvr_comfort.lua", "farfarvr_mount.lua", "farfarvr_effects.lua", "farfarvr_render_fix.lua" })
         {
             string source = Path.Combine(AppContext.BaseDirectory, "Profile", "scripts", name);
             if (!File.Exists(source)) throw new IOException("A Far Far VR module is missing. Use a complete package with its Profile folder.");
             string target = Path.Combine(ProfileFolder, "scripts", name);
             if (!File.Exists(target) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(target))) changes.Add((source,target));
         }
-        foreach (string name in new[] { "farfarvr_controls.png", "farfarvr_controls.jpg" })
+        foreach (string name in new[] { "farfarvr_controls.png" })
         {
-            string source = Path.Combine(AppContext.BaseDirectory, "Profile", name);
+            string source = Path.Combine(AppContext.BaseDirectory, "Profile", "textures", name);
             if (File.Exists(source))
             {
-                string target = Path.Combine(ProfileFolder, name);
-                if (!File.Exists(target) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(target))) changes.Add((source,target));
                 string targetTex = Path.Combine(ProfileFolder, "textures", name);
                 if (!File.Exists(targetTex) || !File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(targetTex))) changes.Add((source,targetTex));
             }

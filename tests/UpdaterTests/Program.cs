@@ -2,6 +2,15 @@ using FarFarWestVR;
 using System.Security.Cryptography;
 using System.Text.Json;
 
+if(args.Length==2 && args[0]=="--bridge-profile")
+{
+    string profile=Path.GetFullPath(args[1]);
+    if(File.ReadAllText(UpdateService.CommandPath(profile)).Trim()!="check") throw new Exception("Lua update command did not reach the launcher.");
+    new UpdateService(profile).WriteStatus("available","v0.4.8","Bridge integration verified.");
+    Console.WriteLine("Launcher received the Lua command and wrote its response.");
+    return;
+}
+
 var releasesJson = """
 [
   {"tag_name":"v0.4.3","draft":true,"assets":[{"name":"FarFarVR-v0.4.3.zip","browser_download_url":"https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.3/FarFarVR-v0.4.3.zip"}]},
@@ -11,7 +20,7 @@ var releasesJson = """
 ]
 """;
 using JsonDocument releases = JsonDocument.Parse(releasesJson);
-Check(UpdateService.CurrentVersion == "0.4.6");
+Check(UpdateService.CurrentVersion == "0.4.7");
 ReleaseUpdate? update = UpdateService.FindUpdate(releases.RootElement, "0.4.1");
 Check(update is { Tag: "v0.4.2", Version: "v0.4.2", Notes: "Fixes and comfort improvements." });
 Check(update!.AssetName == "FarFarVR-v0.4.2.zip" && update.DownloadUrl.Scheme == Uri.UriSchemeHttps);
@@ -19,7 +28,29 @@ Check(UpdateService.FindUpdate(releases.RootElement, "0.4.2") is null);
 using JsonDocument emptyReleases = JsonDocument.Parse("[]");
 Check(UpdateService.FindUpdate(emptyReleases.RootElement, "0.4.0") is null);
 Check(!UpdateService.TryParseVersion("v0.4.invalid", out _));
-Check(UpdateService.TryParseVersion("v0.4.1-playtest", out var playtest) && playtest == new Version(0, 4, 1));
+Check(!UpdateService.TryParseVersion("v0.4.1-playtest", out _));
+
+using JsonDocument prereleases=JsonDocument.Parse("""
+[{"tag_name":"v9.0.0","prerelease":true,"assets":[{"name":"FarFarVR-v9.0.0.zip","browser_download_url":"https://github.com/pr-io/Far-Far-VR/releases/download/v9.0.0/FarFarVR-v9.0.0.zip"}]},
+ {"tag_name":"v9.1.0-playtest","prerelease":false,"assets":[{"name":"FarFarVR-v9.1.0-playtest.zip","browser_download_url":"https://github.com/pr-io/Far-Far-VR/releases/download/v9.1.0-playtest/FarFarVR-v9.1.0-playtest.zip"}]}]
+""");
+Check(UpdateService.FindUpdate(prereleases.RootElement,"0.4.7") is null);
+Check(UpdateService.StatusPath("profile")==Path.Combine("profile","data","farfarvr-updates.txt"));
+Check(UpdateService.CommandPath("profile")==Path.Combine("profile","data","farfarvr-update-command.txt"));
+
+var recoveryRoot=Path.Combine(Path.GetTempPath(),"ffvr-recovery-bootstrap-"+Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(recoveryRoot);
+try
+{
+    string journal=Path.Combine(recoveryRoot,".farfarvr-update-transaction.json");
+    File.WriteAllText(journal,JsonSerializer.Serialize(new {BackupFolder=".farfarvr-update-rollback-fixture"}));
+    Check(UpdateService.RecoveryScript(recoveryRoot)==Path.Combine(recoveryRoot,".farfarvr-update-rollback-fixture","recover.ps1"));
+    File.WriteAllText(journal,JsonSerializer.Serialize(new {BackupFolder="../outside"}));
+    bool invalid=false;
+    try { UpdateService.RecoveryScript(recoveryRoot); } catch(IOException) { invalid=true; }
+    Check(invalid);
+}
+finally { Directory.Delete(recoveryRoot,true); }
 
 var statusRoot = Path.Combine(Path.GetTempPath(), "farfarvr-updater-test-" + Guid.NewGuid().ToString("N"));
 try
@@ -37,7 +68,7 @@ try
 
     service.WriteStatus("available", "v0.4.2", "Notes\nwith details");
     string status = File.ReadAllText(UpdateService.StatusPath(statusRoot));
-    Check(status == "state=available\nversion=v0.4.2\nnotes:\nNotes\nwith details");
+    Check(System.Text.RegularExpressions.Regex.Replace(status,"responseId=[^\n]*\n", "") == "state=available\nversion=v0.4.2\nnotes:\nNotes\nwith details");
 }
 finally
 {

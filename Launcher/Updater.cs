@@ -11,7 +11,7 @@ internal sealed record ReleaseUpdate(string Tag, string Version, string Notes, s
 
 internal sealed class UpdateService
 {
-    internal const string CurrentVersion = "0.4.6";
+    internal static readonly string CurrentVersion = ProductVersion.Value;
     internal const string Repository = "pr-io/Far-Far-VR";
     internal static readonly string LocalRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FarFarWestVRLauncher");
@@ -32,15 +32,17 @@ internal sealed class UpdateService
     {
         string package = Path.Combine(PendingRoot, "package");
         string marker = Path.Combine(PendingRoot, "prepared.txt");
+        bool recovering = File.Exists(Path.Combine(AppContext.BaseDirectory,".farfarvr-update-transaction.json"));
         bool explicitlyRequested = args.Contains("--apply-update", StringComparer.OrdinalIgnoreCase);
-        if (!File.Exists(marker) || !Directory.Exists(package))
+        if (!recovering && (!File.Exists(marker) || !Directory.Exists(package)))
         {
             if (explicitlyRequested) throw new IOException("There is no prepared Far Far VR update to apply.");
             return false;
         }
 
-        string script = Path.Combine(package, "Apply-Update.ps1");
+        string script = recovering ? RecoveryScript(AppContext.BaseDirectory) : Path.Combine(package, "Apply-Update.ps1");
         if (!File.Exists(script)) throw new IOException("The prepared update is missing its safe-apply helper.");
+        if (!recovering) ValidatePackage(package);
         var start = new ProcessStartInfo("powershell.exe")
         {
             UseShellExecute = false,
@@ -54,8 +56,21 @@ internal sealed class UpdateService
             "-StagingRoot", package,
             "-WaitForProcessId", Environment.ProcessId.ToString()
         }) start.ArgumentList.Add(value);
+        if (recovering) start.ArgumentList.Add("-RecoverOnly");
         if (Process.Start(start) is null) throw new IOException("Windows could not start the update apply helper.");
         return true;
+    }
+
+    internal static string RecoveryScript(string installRoot)
+    {
+        string root=Path.GetFullPath(installRoot);
+        using var document=JsonDocument.Parse(File.ReadAllText(Path.Combine(root,".farfarvr-update-transaction.json")));
+        string folder=document.RootElement.GetProperty("BackupFolder").GetString() ?? "";
+        if(Path.GetFileName(folder)!=folder || !folder.StartsWith(".farfarvr-update-rollback-",StringComparison.Ordinal))
+            throw new IOException("The interrupted update has an invalid recovery folder. Backups were preserved.");
+        // This copy exists before the first replacement, even if the installed
+        // launcher and apply helper were interrupted between different versions.
+        return Path.Combine(root,folder,"recover.ps1");
     }
 
     internal async Task<ReleaseUpdate?> CheckAsync(CancellationToken cancellationToken = default)
@@ -72,7 +87,8 @@ internal sealed class UpdateService
         return FindUpdate(document.RootElement, CurrentVersion);
     }
 
-    internal static string StatusPath(string profile) => Path.Combine(profile, "farfarvr-updates.txt");
+    internal static string StatusPath(string profile) => Path.Combine(profile, "data", "farfarvr-updates.txt");
+    internal static string CommandPath(string profile) => Path.Combine(profile, "data", "farfarvr-update-command.txt");
 
     internal async Task StageLatestAsync(CancellationToken cancellationToken = default)
     {
@@ -107,8 +123,12 @@ internal sealed class UpdateService
             Directory.CreateDirectory(temporary);
             using (var zip = ZipFile.OpenRead(archive))
             {
+                long expandedBytes = 0;
+                if (zip.Entries.Count > 10000) throw new IOException("The update contains too many files.");
                 foreach (ZipArchiveEntry entry in zip.Entries)
                 {
+                    expandedBytes = checked(expandedBytes + entry.Length);
+                    if (expandedBytes > 4_000_000_000) throw new IOException("The expanded update exceeds the 4 GB limit.");
                     string destination = Path.GetFullPath(Path.Combine(temporary, entry.FullName));
                     string prefix = Path.GetFullPath(temporary) + Path.DirectorySeparatorChar;
                     if (!destination.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
@@ -133,10 +153,10 @@ internal sealed class UpdateService
 
     internal void WriteStatus(string state, string version, string notes)
     {
-        Directory.CreateDirectory(profile);
+        Directory.CreateDirectory(Path.GetDirectoryName(StatusPath(profile))!);
         string path = StatusPath(profile);
         string temporary = path + ".pending";
-        File.WriteAllText(temporary, $"state={state}\nversion={version}\nnotes:\n{notes}");
+        File.WriteAllText(temporary, $"state={state}\nversion={version}\nresponseId={Guid.NewGuid():N}\nnotes:\n{notes}");
         File.Move(temporary, path, overwrite: true);
     }
 
@@ -149,6 +169,7 @@ internal sealed class UpdateService
         foreach (JsonElement release in releases.EnumerateArray())
         {
             if (release.TryGetProperty("draft", out var draft) && draft.ValueKind == JsonValueKind.True) continue;
+            if (release.TryGetProperty("prerelease", out var prerelease) && prerelease.ValueKind == JsonValueKind.True) continue;
             if (!release.TryGetProperty("tag_name", out var tagElement) || tagElement.ValueKind != JsonValueKind.String) continue;
             string tag = tagElement.GetString()!;
             if (!TryParseVersion(tag, out Version? version) || version <= current || (bestVersion != null && version <= bestVersion)) continue;
@@ -174,7 +195,7 @@ internal sealed class UpdateService
     internal static bool TryParseVersion(string value, out Version? version)
     {
         version = null;
-        Match match = Regex.Match(value, "^v?(\\d+)\\.(\\d+)\\.(\\d+)(?:[-+][A-Za-z0-9.-]+)?$");
+        Match match = Regex.Match(value, "^v?(\\d+)\\.(\\d+)\\.(\\d+)(?:[+][A-Za-z0-9.-]+)?$");
         if (!match.Success || !Version.TryParse($"{match.Groups[1]}.{match.Groups[2]}.{match.Groups[3]}", out Version? parsed)) return false;
         version = parsed;
         return true;

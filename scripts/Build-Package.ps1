@@ -1,10 +1,13 @@
 param([string]$RuntimeFolder = (Join-Path $PSScriptRoot '..\UE5.8'))
 $ErrorActionPreference = 'Stop'
-$version = '0.4.6'
+$version = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '..\version.txt')).Trim()
+python (Join-Path $PSScriptRoot 'Generate-Settings.py')
+if ($LASTEXITCODE -ne 0) { throw 'Settings generation failed.' }
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $runtimeRoot = [IO.Path]::GetFullPath($RuntimeFolder)
 
-$packageRoot = Join-Path $projectRoot 'dist\FarFarVR'
+$packageRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\FarFarVR'))
+if (!$packageRoot.StartsWith($projectRoot.TrimEnd('\')+'\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid package output path.' }
 if (Test-Path -LiteralPath $packageRoot) { Remove-Item -LiteralPath $packageRoot -Recurse -Force }
 
 $publishRoot = Join-Path $projectRoot 'Launcher\publish'
@@ -39,7 +42,7 @@ Set-Content -LiteralPath (Join-Path $packageRoot 'UE5.8\README-RUNTIME.txt') -Va
 $patchSource = Join-Path $projectRoot 'Runtime\backend.ffvrdelta'
 if (!(Test-Path -LiteralPath $patchSource)) { throw 'The verified runtime patch is missing.' }
 $patchHash = (Get-FileHash -LiteralPath $patchSource).Hash
-if ($patchHash -ne 'EC35A59458BBD782DC625031D38B333ECA1CBA157DAD4251A1CEFDC36D7B7716') { throw 'The runtime patch does not match the tested engine.' }
+if ($patchHash -ne '8ECCD095B440C01DD0E21ED5C42D25F7CE19399E478BA09D2D15502A8EBC5DDD') { throw 'The runtime patch does not match the tested engine.' }
 New-Item -ItemType Directory -Path (Join-Path $packageRoot 'Runtime') -Force | Out-Null
 Copy-Item -LiteralPath $patchSource -Destination (Join-Path $packageRoot 'Runtime\backend.ffvrdelta')
 
@@ -59,7 +62,8 @@ Get-ChildItem -LiteralPath $profileSource -File -Recurse |
 foreach ($name in @('README.md', 'THIRD_PARTY.md', 'DISCLAIMER.txt')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $packageRoot
 }
-Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $packageRoot -Recurse
+New-Item -ItemType Directory -Path (Join-Path $packageRoot 'docs') -Force | Out-Null
+Get-ChildItem -LiteralPath (Join-Path $projectRoot 'docs') -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $packageRoot 'docs') }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Launcher\Apply-Update.ps1') -Destination (Join-Path $packageRoot 'Apply-Update.ps1')
 Copy-Item -LiteralPath (Join-Path $packageRoot 'Far Far VR.exe') -Destination (Join-Path $projectRoot 'Far Far VR.exe') -Force
 Set-Content -LiteralPath (Join-Path $packageRoot 'version.txt') -Value $version -Encoding ascii

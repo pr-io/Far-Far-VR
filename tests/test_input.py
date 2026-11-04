@@ -12,6 +12,7 @@ from lupa.lua54 import LuaRuntime
 class InputTests(unittest.TestCase):
     def setUp(self):
         self.lua = LuaRuntime()
+        self.lua.execute("package.path = " + repr(str(ROOT / "Profile/scripts/?.lua").replace("\\", "/")) + " .. ';' .. package.path")
         self.lua.execute('''
             using_vr, drawing_ui, cinema = true, false, false
             ignore_count,stops=0,0

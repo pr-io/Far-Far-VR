@@ -4,6 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../Launcher/ProductVersion.cs" Link="ProductVersion.cs" />
     <Compile Include="../../Launcher/Setup.cs" Link="Setup.cs" />
     <Compile Include="../../Launcher/RuntimePatch.cs" Link="RuntimePatch.cs" />
     <Compile Include="../UpdaterTests/LauncherLogStub.cs" Link="LauncherLogStub.cs" />

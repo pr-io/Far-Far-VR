@@ -8,6 +8,7 @@ from lupa.lua54 import LuaRuntime
 class MountTests(unittest.TestCase):
  def setUp(self):
   self.lua=LuaRuntime()
+  self.lua.execute("package.path = " + repr(str(ROOT / "Profile/scripts/?.lua").replace("\\", "/")) + " .. ';' .. package.path")
   self.lua.execute('''
   fs={write=function() end}; cinema='false'
   function component(p,y,r)
