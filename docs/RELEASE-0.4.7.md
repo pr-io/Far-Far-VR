@@ -17,8 +17,6 @@ Download **FarFarVR-v0.4.7.zip**, extract the entire archive, and run **Far Far 
 
 The launcher downloads the pinned upstream runtime when needed and applies the bundled customization delta locally. The separate `backend.ffvrdelta` asset is for rebuilding the package; players should download the complete ZIP.
 
-## Validation and known issue
+## Validation
 
 Live resolution Save and menu fit were checked with a Quest 3 using Meta OpenXR, and the user tested the local update before authorizing publication. Automated Lua, launcher, updater and runtime reconstruction checks also passed.
-
-**Steam can still report Far Far West as running after the game exits and refuse a relaunch.** This was also reproduced with the VR backend, Lua and OpenXR completely unloaded, using both window close and the game's Quit command. Restarting Steam clears the retained session. This release does not claim to resolve that separate game/Steam session issue.

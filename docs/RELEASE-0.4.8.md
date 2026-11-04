@@ -13,8 +13,6 @@ Download **FarFarVR-v0.4.8.zip**, extract the entire archive, and run **Far Far 
 
 The launcher downloads the pinned upstream runtime when needed and applies the bundled customization delta locally. The separate `backend.ffvrdelta` asset is for package builders; players should download the complete ZIP.
 
-## Validation and known issue
+## Validation
 
 The native backend and launcher were built. The user confirmed the in-game menu is level. No game or headset test was run for this release.
-
-The user reports Steam can still show Far Far West as running after closing it. The last local Steam process log recorded the game AppID removed from its running list after normal game shutdown; this release does not claim to resolve a stale Steam UI status.
