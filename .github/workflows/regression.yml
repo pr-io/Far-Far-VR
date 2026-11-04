@@ -1,0 +1,53 @@
+name: Regression checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows launcher and Lua checks
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install Lua test dependency
+        run: python -m pip install --target tools/lua-test lupa
+      - name: Build launcher
+        run: dotnet build Launcher/FarFarWestVR.csproj -c Release
+      - name: Run launcher, settings and updater checks
+        run: |
+          foreach ($project in @('SessionLinkTests', 'SettingsIsolationTests', 'SocialBindingsTests', 'UpdaterTests')) {
+            dotnet run --project "tests/$project/$project.csproj"
+            if ($LASTEXITCODE -ne 0) { throw "$project failed." }
+          }
+      - name: Check shutdown monitor with disposable fixture
+        run: |
+          dotnet build tests/ExitMonitorFixture/ExitMonitorFixture.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Shutdown fixture build failed.' }
+          dotnet run --project tests/ExitMonitorTests/ExitMonitorTests.csproj -- tests/ExitMonitorFixture/bin/Debug/net8.0/FarFarWest-Win64-Shipping.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Shutdown checks failed.' }
+      - name: Run Python and Lua regressions
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tools/lua-test
+        run: python -m unittest discover -s tests -v

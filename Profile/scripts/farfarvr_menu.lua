@@ -92,7 +92,8 @@ local function poll_update_status()
         ['up-to-date']='Up to date',
         prepared='Update prepared. Exit the game and reopen the launcher to install it.',
         applied='Update installed.',
-        error='Update check failed: '..update_notes
+        error='Update check failed: '..update_notes,
+        canceled='Update canceled. Check for updates to try again.'
     }
     update_status = messages[update_state] or update_status
 end

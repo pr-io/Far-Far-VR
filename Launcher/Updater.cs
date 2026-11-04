@@ -20,6 +20,9 @@ internal sealed class UpdateService
     private readonly HttpClient client;
     private readonly string profile;
     private readonly Func<string?> tokenProvider;
+    private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan DownloadInactivityTimeout = TimeSpan.FromSeconds(30);
 
     internal UpdateService(string profile, HttpClient? client = null, Func<string?>? tokenProvider = null)
     {
@@ -75,16 +78,25 @@ internal sealed class UpdateService
 
     internal async Task<ReleaseUpdate?> CheckAsync(CancellationToken cancellationToken = default)
     {
-        using var request = CreateRequest(HttpMethod.Get,
-            $"https://api.github.com/repos/{Repository}/releases?per_page=30");
-        request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/" + CurrentVersion);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new IOException("The update repository is unavailable. If it is private, check the launcher token and repository access.");
-        response.EnsureSuccessStatusCode();
-        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
-        return FindUpdate(document.RootElement, CurrentVersion);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(CheckTimeout);
+        try
+        {
+            using var request = CreateRequest(HttpMethod.Get,
+                $"https://api.github.com/repos/{Repository}/releases?per_page=30");
+            request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/" + CurrentVersion);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                throw new IOException("The update repository is unavailable. If it is private, check the launcher token and repository access.");
+            response.EnsureSuccessStatusCode();
+            using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(timeout.Token), cancellationToken: timeout.Token);
+            return FindUpdate(document.RootElement, CurrentVersion);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new IOException("The update check timed out. Check your connection and try again.");
+        }
     }
 
     internal static string StatusPath(string profile) => Path.Combine(profile, "data", "farfarvr-updates.txt");
@@ -92,7 +104,10 @@ internal sealed class UpdateService
 
     internal async Task StageLatestAsync(CancellationToken cancellationToken = default)
     {
-        ReleaseUpdate? release = await CheckAsync(cancellationToken);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(DownloadTimeout);
+        var token = timeout.Token;
+        ReleaseUpdate? release = await CheckAsync(token);
         if (release is null) throw new IOException("No newer published Far Far VR release is available.");
 
         Directory.CreateDirectory(PendingRoot);
@@ -102,22 +117,14 @@ internal sealed class UpdateService
         {
             using var request = CreateRequest(HttpMethod.Get, release.DownloadUrl);
             request.Headers.UserAgent.ParseAdd("FarFarVR-Launcher/" + CurrentVersion);
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is > 2_000_000_000)
                 throw new IOException("The update package exceeds the 2 GB safety limit.");
-            await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
+            await using (var source = await response.Content.ReadAsStreamAsync(token))
             await using (var destination = new FileStream(archive, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
             {
-                byte[] buffer = new byte[81920];
-                long total = 0;
-                int read;
-                while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
-                {
-                    total += read;
-                    if (total > 2_000_000_000) throw new IOException("The update package exceeds the 2 GB safety limit.");
-                    await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                }
+                await CopyDownloadAsync(source, destination, DownloadInactivityTimeout, token);
             }
 
             Directory.CreateDirectory(temporary);
@@ -127,6 +134,7 @@ internal sealed class UpdateService
                 if (zip.Entries.Count > 10000) throw new IOException("The update contains too many files.");
                 foreach (ZipArchiveEntry entry in zip.Entries)
                 {
+                    token.ThrowIfCancellationRequested();
                     expandedBytes = checked(expandedBytes + entry.Length);
                     if (expandedBytes > 4_000_000_000) throw new IOException("The expanded update exceeds the 4 GB limit.");
                     string destination = Path.GetFullPath(Path.Combine(temporary, entry.FullName));
@@ -138,6 +146,7 @@ internal sealed class UpdateService
                 zip.ExtractToDirectory(temporary, overwriteFiles: false);
             }
             ValidatePackage(temporary);
+            token.ThrowIfCancellationRequested();
 
             string package = Path.Combine(PendingRoot, "package");
             if (Directory.Exists(package)) Directory.Delete(package, recursive: true);
@@ -145,9 +154,36 @@ internal sealed class UpdateService
             File.WriteAllText(Path.Combine(PendingRoot, "prepared.txt"), release.Tag);
             WriteStatus("prepared", release.Version, "Update staged. Exit Far Far West, then reopen the launcher to install it.");
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new IOException("The update download timed out. Check your connection and try again.");
+        }
         finally
         {
             if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true);
+            if (File.Exists(archive)) File.Delete(archive);
+        }
+    }
+
+    internal static async Task CopyDownloadAsync(Stream source, Stream destination,
+        TimeSpan inactivityTimeout, CancellationToken cancellationToken = default)
+    {
+        byte[] buffer = new byte[81920];
+        long total = 0;
+        while (true)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(inactivityTimeout);
+            int read;
+            try { read = await source.ReadAsync(buffer.AsMemory(), timeout.Token); }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new IOException("The update download stopped responding. Check your connection and try again.");
+            }
+            if (read == 0) return;
+            total += read;
+            if (total > 2_000_000_000) throw new IOException("The update package exceeds the 2 GB safety limit.");
+            await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
         }
     }
 

@@ -10,11 +10,12 @@ internal sealed class UpdatesForm : Form
     private readonly Button check = new() { Text="Check for updates", Bounds=new Rectangle(24,434,195,44) };
     private readonly Button download = new() { Text="Download update", Bounds=new Rectangle(231,434,210,44) };
     private readonly Button install = new() { Text="Install & restart", Bounds=new Rectangle(453,434,221,44) };
+    private readonly Button cancel = new() { Text="Cancel", Bounds=new Rectangle(554,112,120,38), Visible=false };
     private readonly System.Windows.Forms.Timer timer = new() { Interval=500 };
     private string state = "idle";
     private readonly Func<bool> busy;
 
-    internal UpdatesForm(UpdateService service, Func<string,Task> run, Func<bool> busy)
+    internal UpdatesForm(UpdateService service, Func<string,Task> run, Func<bool> busy, Action cancelUpdate)
     {
         this.busy=busy;
         Text="Far Far VR — Updates"; ClientSize=new Size(698,512); Theme.Form(this);
@@ -23,8 +24,9 @@ internal sealed class UpdatesForm : Form
         Controls.Add(Theme.Label("Mod updates",24,20,650,38,22,true));
         Controls.Add(Theme.Label("Installed version: v"+UpdateService.CurrentVersion,24,64,650,24,10,false,true));
         Controls.Add(Theme.Label("Release notes / update details",24,166,650,24,10,true));
-        Theme.Button(check); Theme.Button(download,true); Theme.Button(install,true);
-        Controls.AddRange([status,notes,check,download,install]);
+        Theme.Button(check); Theme.Button(download,true); Theme.Button(install,true); Theme.Button(cancel);
+        Controls.AddRange([status,notes,check,download,install,cancel]);
+        cancel.Click+=(_,_)=>cancelUpdate();
         var repo=new LinkLabel { Text="pr-io/Far-Far-VR on GitHub", Bounds=new Rectangle(24,484,650,24), LinkColor=Theme.Accent };
         repo.LinkClicked+=(_,_)=>Process.Start(new ProcessStartInfo("https://github.com/pr-io/Far-Far-VR/releases") { UseShellExecute=true });
         Controls.Add(repo);
@@ -61,11 +63,14 @@ internal sealed class UpdatesForm : Form
                     "prepared"=>"Ready to install: "+version+". Close the game, then select Install & restart.",
                     "applied"=>"Update installed.",
                     "error"=>"Update failed. See the details below, then try again.",
+                    "canceled"=>"Update canceled. Check for updates to try again.",
                     _=>"Check for the latest release."
                 };
             }
         } catch(IOException) { } catch(UnauthorizedAccessException) { status.Text="Cannot read update status."; }
         bool working=busy();
+        cancel.Visible=working;
+        status.Width=working?518:650;
         check.Enabled=!working; download.Enabled=!working&&state=="available";
         install.Enabled=!working&&state=="prepared";
     }

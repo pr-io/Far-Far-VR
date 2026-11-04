@@ -24,6 +24,7 @@ Python 3.13 with Lua test support:
 
 ```powershell
 python -m pip install --target tools/lua-test lupa
+dotnet build tests\UpdaterTests\UpdaterTests.csproj
 python -m unittest discover -s tests -v
 ```
 
@@ -35,6 +36,21 @@ dotnet run --project tests\SettingsIsolationTests\SettingsIsolationTests.csproj
 dotnet run --project tests\SocialBindingsTests\SocialBindingsTests.csproj
 dotnet run --project tests\UpdaterTests\UpdaterTests.csproj
 ```
+
+Shutdown-monitor checks use a separate disposable process fixture. Build it first, then pass its executable to the checks:
+
+```powershell
+dotnet build tests\ExitMonitorFixture\ExitMonitorFixture.csproj
+dotnet run --project tests\ExitMonitorTests\ExitMonitorTests.csproj -- tests\ExitMonitorFixture\bin\Debug\net8.0\FarFarWest-Win64-Shipping.exe
+```
+
+The fixture checks that active sessions are preserved, a mismatched process identity is refused, and a completed shutdown is cleaned up. It does not launch Far Far West or establish headset shutdown behavior.
+
+## Automated GitHub checks
+
+GitHub Actions runs the Windows launcher build, launcher/settings/updater checks, shutdown-monitor fixture, and Python/Lua regression suite on pushes and pull requests to `main`. You can also run the workflow from the repository's **Actions > Regression checks > Run workflow** page.
+
+These checks do not require the proprietary game, a headset, or private UESDK access. Native engine builds and real upstream runtime-delivery checks remain separate local checks described below. Automated checks do not establish gameplay, headset visual quality, controller feel, or performance.
 
 Runtime installation, real upstream download and rollback checks require the pinned upstream archive and customization delta:
 

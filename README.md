@@ -36,7 +36,7 @@ Keep the executable, `Profile`, `Runtime` and `UE5.8` folders together. No compi
 - Far Far VR settings menu, controls guide, calibration and live comfort/display adjustments.
 - Separate VR and flat-game graphics and controller settings.
 - Camera handling for riding, emotes, cutscenes and level transitions.
-- Automatic runtime setup and in-menu update checks.
+- Automatic runtime setup and updates from the desktop launcher or headset menu.
 
 ## Controls
 
@@ -52,7 +52,11 @@ The controls image is also available in the Far Far VR menu. Use **Recenter view
 
 ## Updates
 
-Open **Far Far VR menu > Updates > Check for Updates**. If one is available, choose **Download & Prepare Update**. Close the game and launcher, then reopen the launcher to install it.
+On your desktop, open **Far Far VR.exe > Updates > Check for updates**. If an update is available, select **Download update**. Close Far Far West, then select **Install & restart**. The launcher installs the update and reopens automatically.
+
+You can cancel a check or download with **Cancel** in the desktop Updates window. If a download stops responding, it times out so you can check for updates and try again.
+
+In your headset, open **Far Far VR menu > Updates > Check for Updates**, then choose **Download & Prepare Update**. Exit the game and reopen the launcher to install the prepared update.
 
 You can also get the complete package from [Releases](https://github.com/pr-io/Far-Far-VR/releases). Keep a backup before replacing an existing installation. Fully exit VR before starting the flat game so the launcher can restore its desktop settings.
 

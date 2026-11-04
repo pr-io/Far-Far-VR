@@ -217,6 +217,39 @@ try
 }
 finally { Directory.Delete(aimRoot, recursive: true); }
 
+// Exercise the actual body-copy path without networking or installed files.
+using (var complete = new MemoryStream(new byte[] { 1, 2, 3 }))
+using (var downloaded = new MemoryStream())
+{
+    await UpdateService.CopyDownloadAsync(complete, downloaded, TimeSpan.FromSeconds(5));
+    Check(downloaded.ToArray().SequenceEqual(new byte[] { 1, 2, 3 }));
+}
+using (var stalled = new StalledDownloadStream())
+using (var downloaded = new MemoryStream())
+{
+    bool timedOut = false;
+    try { await UpdateService.CopyDownloadAsync(stalled, downloaded, TimeSpan.FromMilliseconds(100)).WaitAsync(TimeSpan.FromSeconds(5)); }
+    catch (IOException ex) { timedOut = ex.Message.Contains("stopped responding"); }
+    Check(timedOut);
+}
+using (var stalled = new StalledDownloadStream())
+using (var downloaded = new MemoryStream())
+using (var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
+{
+    bool canceled = false;
+    try { await UpdateService.CopyDownloadAsync(stalled, downloaded, TimeSpan.FromSeconds(5), cancel.Token).WaitAsync(TimeSpan.FromSeconds(10)); }
+    catch (OperationCanceledException) { canceled = cancel.IsCancellationRequested; }
+    Check(canceled);
+}
+// A canceled/stalled transfer must not prevent a subsequent successful retry.
+using (var retry = new MemoryStream(new byte[] { 4, 5, 6 }))
+using (var downloaded = new MemoryStream())
+{
+    await UpdateService.CopyDownloadAsync(retry, downloaded, TimeSpan.FromSeconds(5));
+    Check(downloaded.ToArray().SequenceEqual(new byte[] { 4, 5, 6 }));
+}
+Console.WriteLine("Update body completion, inactivity timeout, cancellation and retry checks passed.");
+
 void Check(bool condition)
 {
     if (!condition) throw new Exception("Updater smoke test failed.");
@@ -236,4 +269,23 @@ sealed class CapturingHandler : HttpMessageHandler
             Content = new StringContent("[]")
         });
     }
+}
+
+sealed class StalledDownloadStream : Stream
+{
+    public override bool CanRead => true;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        return 0;
+    }
+    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override void Flush() => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

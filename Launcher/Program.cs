@@ -55,12 +55,16 @@ internal sealed class LauncherForm : Form
     private CancellationTokenSource? cancellation;
     private bool closing;
     private int? sessionProcess;
+    // Game discovery precedes successful injection. Keep watching even when
+    // startup is canceled or fails, so desktop settings are restored on exit.
+    private int watchedProcess;
     private SessionSnapshot? session;
     private bool handedOff;
     private readonly SessionLink sessionLink = new(Setup.ProfileFolder);
     private readonly System.Windows.Forms.Timer sessionTimer = new() { Interval=500 };
     private readonly UpdateService updateService = new(Setup.ProfileFolder);
     private Task? updateTask;
+    private CancellationTokenSource? updateCancellation;
     private readonly Setup setup = Setup.Load();
     private readonly Button options = new();
     private static readonly Color Gold = Color.FromArgb(244, 173, 62);
@@ -84,7 +88,7 @@ internal sealed class LauncherForm : Form
             using var dialog = new UpdatesForm(updateService, command => {
                 if (updateTask is { IsCompleted: false }) return updateTask;
                 return updateTask = RunUpdateCommandAsync(command);
-            }, () => updateTask is { IsCompleted: false });
+            }, () => updateTask is { IsCompleted: false }, () => updateCancellation?.Cancel());
             dialog.ShowDialog(this);
         };
         Controls.Add(updatesButton);
@@ -211,7 +215,7 @@ internal sealed class LauncherForm : Form
         Controls.Add(footer);
         Controls.AddRange([start,options,progress,log]);
         sessionTimer.Tick+=(_,_)=>{PollSession();PollUpdateCommand();};sessionTimer.Start();
-        FormClosing += (_, _) => { closing = true; cancellation?.Cancel(); sessionTimer.Stop(); try { SettingsIsolation.ExitVrSession(); } catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) { LauncherLog.Write("Settings recovery pending: "+ex.Message); } };
+        FormClosing += (_, _) => { closing = true; cancellation?.Cancel(); updateCancellation?.Cancel(); sessionTimer.Stop(); try { SettingsIsolation.ExitVrSession(); } catch(Exception ex) when(ex is IOException or UnauthorizedAccessException) { LauncherLog.Write("Settings recovery pending: "+ex.Message); } };
         FormClosed += (_,_)=>{sessionTimer.Dispose();LauncherLog.Write("Launcher window closed; exiting process.");Environment.Exit(0);};
     }
 
@@ -240,7 +244,11 @@ internal sealed class LauncherForm : Form
         try
         {
             int processId=await Task.Run(
-                () => GameLaunch.RunAsync(setup, updates, token, SettingsIsolation.UpdateSessionProcessId),
+                () => GameLaunch.RunAsync(setup, updates, token, foundProcessId => {
+                    // This callback runs on the launch worker; UI reads it atomically.
+                    Volatile.Write(ref watchedProcess, foundProcessId);
+                    SettingsIsolation.UpdateSessionProcessId(foundProcessId);
+                }),
                 token);
             if (closing) return;
             sessionProcess=processId;handedOff=false;session=null;
@@ -290,14 +298,24 @@ internal sealed class LauncherForm : Form
     }
     private void PollSession()
     {
-        if(closing||sessionProcess is not int processId)return;
+        int processId = Volatile.Read(ref watchedProcess);
+        if(closing)return;
+        if(processId==0)
+        {
+            // Steam activation can be canceled before game discovery. Once
+            // that attempt ends, a remaining journal still needs cleanup.
+            if(cancellation==null && SettingsIsolation.IsInVrSession() && !SettingsIsolation.IsGameRunning()) EndSession();
+            return;
+        }
         try
         {
             using var game=Process.GetProcessById(processId);
             if(game.HasExited||game.ProcessName!="FarFarWest-Win64-Shipping"){EndSession();return;}
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException){EndSession();return;}
-        catch(Win32Exception){session=null;start.Enabled=false;options.Enabled=false;status.Text="Game status is unavailable. The headset menu is still available with Start.";return;}
+        catch(Win32Exception){return;} // Retry without replacing a startup failure/cancel message.
+        // Monitoring owns cleanup; only a completed startup owns the headset UI.
+        if(sessionProcess==null)return;
         session=sessionLink.Read(processId,DateTimeOffset.UtcNow);
         if(session is not {RuntimeReady:true,MenuReady:true})
         {
@@ -335,27 +353,39 @@ internal sealed class LauncherForm : Form
 
         updateTask = RunUpdateCommandAsync(command);
     }
-    private Task RunUpdateCommandAsync(string command) => Task.Run(async () =>
+    private Task RunUpdateCommandAsync(string command)
     {
-        try
+        updateCancellation?.Dispose();
+        updateCancellation = new CancellationTokenSource();
+        var token = updateCancellation.Token;
+        return Task.Run(async () =>
         {
-            updateService.WriteStatus(command == "check" ? "checking" : "downloading", "v" + UpdateService.CurrentVersion, "");
-            if (command == "check")
+            try
             {
-                ReleaseUpdate? release = await updateService.CheckAsync();
-                updateService.WriteStatus(release is null ? "up-to-date" : "available",
-                    release?.Version ?? "v" + UpdateService.CurrentVersion,
-                    release?.Notes ?? "You are running the latest published Far Far VR release.");
+                updateService.WriteStatus(command == "check" ? "checking" : "downloading", "v" + UpdateService.CurrentVersion, "");
+                if (command == "check")
+                {
+                    ReleaseUpdate? release = await updateService.CheckAsync(token);
+                    updateService.WriteStatus(release is null ? "up-to-date" : "available",
+                        release?.Version ?? "v" + UpdateService.CurrentVersion,
+                        release?.Notes ?? "You are running the latest published Far Far VR release.");
+                }
+                else await updateService.StageLatestAsync(token);
             }
-            else await updateService.StageLatestAsync();
-        }
-        catch (Exception ex)
-        {
-            LauncherLog.Write("Update request failed: " + ex);
-            try { updateService.WriteStatus("error", "v" + UpdateService.CurrentVersion, ex.Message); }
-            catch (Exception statusError) { LauncherLog.Write("Update status could not be saved: " + statusError.Message); }
-        }
-    });
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                LauncherLog.Write("Update request canceled.");
+                try { updateService.WriteStatus("canceled", "v" + UpdateService.CurrentVersion, "Update canceled. Check for updates to try again."); }
+                catch (Exception ex) { LauncherLog.Write("Update status could not be saved: " + ex.Message); }
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Write("Update request failed: " + ex);
+                try { updateService.WriteStatus("error", "v" + UpdateService.CurrentVersion, ex.Message); }
+                catch (Exception statusError) { LauncherLog.Write("Update status could not be saved: " + statusError.Message); }
+            }
+        });
+    }
     private void EndSession()
     {
         try { SettingsIsolation.ExitVrSession(); }
@@ -365,6 +395,7 @@ internal sealed class LauncherForm : Form
             status.Text="Finishing game shutdown and restoring desktop settings…";
             return; // Poll again after the process list releases the exiting game.
         }
+        Volatile.Write(ref watchedProcess, 0);
         sessionProcess=null;session=null;handedOff=false;TopMost=false;
         LauncherLog.Write("Game session ended; closing launcher to release the Steam shortcut session.");
         Close();
