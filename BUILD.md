@@ -23,7 +23,7 @@ Output: `dist/FarFarVR-v0.4.9.zip`. It includes the launcher, player profile, de
 Python 3.13 with Lua test support:
 
 ```powershell
-python -m pip install --target tools/lua-test lupa
+python -m pip install --target tools/lua-test -r tests/requirements.txt
 dotnet build tests\UpdaterTests\UpdaterTests.csproj
 python -m unittest discover -s tests -v
 ```

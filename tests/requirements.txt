@@ -1,0 +1,2 @@
+# Lua bridge used by the Python regression checks.
+lupa==2.8
