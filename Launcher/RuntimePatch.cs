@@ -9,7 +9,7 @@ namespace FarFarWestVR;
 internal static class RuntimePatch
 {
     internal const string PatchFile = "backend.ffvrdelta";
-    internal const string PatchHash = "137D5107CFEA0EE16E1EAE72CB898BFE66DF57B65CD20D2D3CCF1F82106E4FFA";
+    internal const string PatchHash = "E3CFB3893F70119202591FC1C5CEFB81084A53EDBD2BEEC0BC5BD2D7B70E7A19";
     internal const int TargetSize = 15797760;
     private static readonly Dictionary<string, string> Required = new(StringComparer.OrdinalIgnoreCase)
     {

@@ -6,7 +6,7 @@ from pathlib import Path
 p=argparse.ArgumentParser();p.add_argument('--base',required=True);p.add_argument('--target',required=True);p.add_argument('--output',default='Runtime/backend.ffvrdelta');args=p.parse_args()
 source=Path(args.base).read_bytes();target=Path(args.target).read_bytes()
 assert hashlib.sha256(source).hexdigest().upper()=='FEFF6417359F6E36ABAC6577598A86B96D485A023A850F8614043AA0A508C8CB','Unexpected upstream source'
-assert hashlib.sha256(target).hexdigest().upper()=='1F01B59710428DA7C510B411EE9BFEC8B1DEB1DB52F369409F93B6C0BBEB1288','Unexpected target; only the explicitly pinned candidate engine is accepted'
+assert hashlib.sha256(target).hexdigest().upper()=='974C19191D51C0401FA0F40F442E6E5BF0E8144C03CFA7FAD120FD6F92993448','Unexpected target; only the explicitly pinned candidate engine is accepted'
 class Input(c.Structure):_fields_=[('ptr',c.c_void_p),('size',c.c_size_t),('editable',c.c_int)]
 class Output(c.Structure):_fields_=[('ptr',c.c_void_p),('size',c.c_size_t)]
 api=c.WinDLL('msdelta.dll',use_last_error=True)

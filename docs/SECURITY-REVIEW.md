@@ -8,4 +8,6 @@ Additional hardening restricts update asset URLs to this repository's HTTPS GitH
 
 Native release preparation now sanitizes embedded developer profile roots from diagnostic data using `scripts/Sanitize-RuntimePaths.py`. It accepts only the pinned source image, uses equal-length edits in read-only non-executable sections, and refuses changes to executable sections or image size. The resulting backend and delivery delta have new integrity pins.
 
+Correction in v0.4.11: read-only PE data also contains compiled GPU shaders. The v0.4.10 cleanup edited two shader metadata strings without updating the DXBC container checksums. The sanitizer now preserves shader program chunks and regenerates the affected container checksums. Checking native executable sections alone was insufficient to establish graphics behavior.
+
 Automated scans and pattern searches are limited evidence: they do not prove that all vulnerabilities or personal information have been found. Historical commits, published downloads, cached pages and existing third-party copies require separate review and cleanup; changing the current source alone does not remove those copies.

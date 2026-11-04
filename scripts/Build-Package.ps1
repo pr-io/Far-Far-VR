@@ -44,7 +44,7 @@ Set-Content -LiteralPath (Join-Path $packageRoot 'UE5.8\README-RUNTIME.txt') -Va
 $patchSource = Join-Path $projectRoot 'Runtime\backend.ffvrdelta'
 if (!(Test-Path -LiteralPath $patchSource)) { throw 'The verified runtime patch is missing.' }
 $patchHash = (Get-FileHash -LiteralPath $patchSource).Hash
-if ($patchHash -ne '137D5107CFEA0EE16E1EAE72CB898BFE66DF57B65CD20D2D3CCF1F82106E4FFA') { throw 'The runtime patch does not match the current engine.' }
+if ($patchHash -ne 'E3CFB3893F70119202591FC1C5CEFB81084A53EDBD2BEEC0BC5BD2D7B70E7A19') { throw 'The runtime patch does not match the current engine.' }
 New-Item -ItemType Directory -Path (Join-Path $packageRoot 'Runtime') -Force | Out-Null
 Copy-Item -LiteralPath $patchSource -Destination (Join-Path $packageRoot 'Runtime\backend.ffvrdelta')
 
