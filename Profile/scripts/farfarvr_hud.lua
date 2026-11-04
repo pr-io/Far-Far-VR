@@ -40,11 +40,9 @@ local function alive(o)
 end
 local function local_hud(hud,pc)
     if not alive(hud) then return false end
-    local owner=hud:GetOwningPlayer()
-    if owner~=nil and owner~=pc then return false end
-    -- User widgets embedded in the gameplay HUD need not be added directly to
-    -- the viewport or have an explicit owning player.
-    return hud:IsInViewport() or (alive(hud:GetParent()) and hud:IsVisible())
+    -- Match the original renderer's local viewport HUD selection. A visible
+    -- nested or ownerless copy is not evidence that it is the player's HUD.
+    return hud:IsInViewport() and hud:GetOwningPlayer()==pc
 end
 local function restore_title()
     if title_camera and (alive(title_camera) or api:get_local_pawn(0)==title_owner) then
@@ -194,7 +192,7 @@ local function render_aim(s)
             end
         end
     end
-    local aim_method=tonumber(vr:get_mod_value('VR_AimMethod')) or 0
+    local aim_method=tonumber(vr:get_mod_value('VR_AimMethod')) or 2
     local hand_index=(aim_method==3 or aim_method==5) and 0 or 1
     if s.hand_index~=hand_index then UEVR_UObjectHook.get_or_add_motion_controller_state(s.hand):set_hand(hand_index); s.hand_index=hand_index end
     local drawn=false
@@ -213,12 +211,10 @@ local function render_aim(s)
     end
     local firearm=drawn
     local start,direction
-    if aim_method>=2 and aim_method<=5 then
-        -- The render camera can already contain the head-view override here.
-        -- Controller aiming must use the tracked aim anchor, not that camera.
-        start=s.hand:K2_GetComponentLocation();direction=s.hand:GetForwardVector()
-        s.aim_source=hand_index==0 and 'tracked left hand' or 'tracked right hand'
-    elseif firearm then
+    if firearm then
+        -- Restore the wearer-accepted v7 ray: F_TraceBullet reads this camera's
+        -- location and forward direction before spread. A tracked hand ray is
+        -- not interchangeable with the game's firing ray.
         local camera=assert(s.pc.PlayerCameraManager,'Firing camera unavailable')
         start=camera:K2_GetActorLocation();direction=camera:GetActorForwardVector()
         s.aim_source='game firing camera'
