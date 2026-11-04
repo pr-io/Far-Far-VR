@@ -15,8 +15,8 @@ The player ZIP excludes complete `UEVRBackend.dll`, `LuaVR.dll`, `openxr_loader.
 | Verified component | SHA-256 |
 | --- | --- |
 | Upstream archive | `FDF325C62BA43BC1DA98ED5F453633FA106CAEF0DF9CB8121566F7AA138F6D55` |
-| Customization delta | `E3CFB3893F70119202591FC1C5CEFB81084A53EDBD2BEEC0BC5BD2D7B70E7A19` |
-| Installed backend | `974C19191D51C0401FA0F40F442E6E5BF0E8144C03CFA7FAD120FD6F92993448` |
+| Customization delta | `6A4E0FF8FC42E94B0FD5F8C1FBC3C41FFDA846C5B621F3318C89AD65FC41C43D` |
+| Installed backend | `1B6AC545B746190F4502C346897A36A3002C4BB61FD994521C70579F21B47A74` |
 
 The upstream engine [license](https://github.com/joeyhodge/UEVR/blob/963b157573eaef20528b602d1d9790b8105819b3/LICENSE) states "All rights reserved." Upstream retains its rights; attribution, public source access and distributing a delta do not grant additional engine rights or establish endorsement. No blanket legal certification or commercial-use permission is claimed.
 

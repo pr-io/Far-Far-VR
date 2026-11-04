@@ -1,4 +1,4 @@
-"""Per-view firing-ray HUD ownership, projection and recovery contracts."""
+"""Independent firing-ray artwork, HUD clipping boundary and recovery contracts."""
 from pathlib import Path
 import unittest
 from lupa.lua54 import LuaRuntime
@@ -18,7 +18,7 @@ function node(kind)
   for _,k in ipairs({'Anchors','Alignment','Position','Size','ZOrder'})do slot['Set'..k]=function(self,v)self[k]=v end end
   function slot:SetLayout(v)self.LayoutData=v end;child.Slot=slot;return slot
  end
- for _,k in ipairs({'Visibility','Brush','ColorAndOpacity','RenderOpacity','RenderTransform','Widget','WidgetSpace','DrawSize','CollisionEnabled','RenderInMainPass','RenderInDepthPass','CastShadow','RenderCustomDepth','VisibleInRayTracing','ReceivesDecals','WindowFocusable'})do n['Set'..k]=function(self,v)if k=='DrawSize' then assert(v.struct_path=='ScriptStruct /Script/CoreUObject.Vector2D','SetDrawSize requires Vector2D, not IntPoint')end;self['set_'..k]=v end end
+ for _,k in ipairs({'Visibility','Brush','ColorAndOpacity','RenderOpacity','RenderTransform','Widget','WidgetSpace','DrawSize','CollisionEnabled','RenderInMainPass','RenderInDepthPass','CastShadow','RenderCustomDepth','VisibleInRayTracing','ReceivesDecals','WindowFocusable','ComponentTickEnabled','HiddenInGame'})do n['Set'..k]=function(self,v)if k=='DrawSize' then assert(v.struct_path=='ScriptStruct /Script/CoreUObject.Vector2D','SetDrawSize requires Vector2D, not IntPoint')end;self['set_'..k]=v end end
  function n:GetVisibility()return self.visibility or 0 end
  function n:StopAllAnimations()self.stopped=true end
  function n:RequestRedraw()self.redraws=(self.redraws or 0)+1 end
@@ -71,24 +71,24 @@ class HudTests(unittest.TestCase):
   self.lua.execute((ROOT/'Profile/scripts/farfarvr_hud.lua').read_text())
   self.lua.execute("build=capture(tick,'build');update=capture(tick,'update');cleanup=capture(tick,'cleanup');valid_state=capture(tick,'valid_state');render_aim=capture(view_tick,'render_aim');function built()build(pawn,pc,hud);return capture(tick,'state')end")
  def check(self,s): self.lua.execute(s)
- def test_artwork_uses_canvas_without_offscreen_renderer(self):
-  self.check("local s=built(); assert(not s.component and not s.host and #s.images==3);assert(s.canvas:GetParent()==root);for _,i in ipairs(s.images)do assert(i.clone.outer==hud.WidgetTree and i.source:GetParent()==i.wrapper)end")
+ def test_artwork_is_owned_by_private_texture_outside_information_hud(self):
+  self.check("local s=built();assert(s.component and s.host and #s.images==3);assert(s.canvas:GetParent()==nil and s.host.WidgetTree.RootWidget==s.canvas and s.component.set_Widget==s.host);assert(s.component.set_DrawSize.X==256 and s.component.set_DrawSize.Y==256);for _,i in ipairs(s.images)do assert(i.clone.outer==s.host.WidgetTree and i.clone.outer~=hud.WidgetTree and i.source:GetParent()==i.wrapper)end")
  def test_live_material_and_hit_transform_are_preserved(self):
   self.check("local s=built();hud.HitImage.RenderOpacity=.7;hud.HitImage.RenderTransform.Angle=15;update(s,pc,.02);assert(s.images[2].clone.set_RenderOpacity==.7 and s.images[2].clone.set_RenderTransform.Angle==15);assert(s.images[1].clone.set_Brush==hud.Crosshair_Top.Brush)")
  def test_empty_hands_follow_selected_hand(self):
   self.check("local s=built();update(s,pc,.02);view_tick();assert(s.aim_source=='tracked right hand' and s.hand.hand==1);values.VR_AimMethod='3';view_tick();assert(s.hand.hand==0)")
  def test_drawn_weapons_use_firing_camera(self):
-  self.check("local s=built();local item=node('weapon');item.isDrawn=true;pawn.AC_PlayerItems={equipedItem=item};pc.PlayerCameraManager=node('camera');pc.PlayerCameraManager.forward={X=1,Y=.2,Z=.1};update(s,pc,.02);view_tick();assert(s.aim_source=='game firing camera' and s.reticle_slot.Position.X>0 and s.reticle_slot.Position.Y<0)")
+  self.check("local s=built();local item=node('weapon');item.isDrawn=true;pawn.AC_PlayerItems={equipedItem=item};pc.PlayerCameraManager=node('camera');pc.PlayerCameraManager.forward={X=1,Y=.2,Z=.1};update(s,pc,.02);view_tick();local x,y,z=values.VR_FarFarReticleTarget:match('([^ ]+) ([^ ]+) ([^ ]+)');assert(s.aim_source=='game firing camera' and math.abs(tonumber(x)-.55)<.001 and math.abs(tonumber(y)-.275)<.001 and math.abs(tonumber(z)+2.75)<.001)")
  def test_holstered_weapons_use_hand(self):
   self.check("local s=built();local item=node('weapon');item.isDrawn=false;pawn.AC_PlayerItems={equipedItem=item};update(s,pc,.02);view_tick();assert(s.aim_source=='tracked right hand')")
- def test_locked_hud_passes_actual_firing_endpoint(self):
-  self.check("local s=built();values.UI_FollowView='false';values.VR_FarFarGunAim='.7 .4';s.hand.forward={X=1,Y=.2,Z=.1};update(s,pc,.02);view_tick();local x,y,z=values.VR_FarFarGunAimTarget:match('([^ ]+) ([^ ]+) ([^ ]+)');assert(math.abs(tonumber(x)-55)<.001 and math.abs(tonumber(y)-27.5)<.001 and math.abs(tonumber(z)+275)<.001);assert(math.abs(s.reticle_slot.Position.X-384)<.001)")
- def test_missing_projection_hides_original_and_clone(self):
-  self.check("local s=built();values.UI_FollowView='false';update(s,pc,.02);view_tick();assert(s.reticle.set_Visibility==2 and s.images[1].wrapper.set_Visibility==2)")
+ def test_hud_placement_does_not_change_firing_endpoint(self):
+  self.check("local s=built();s.hand.forward={X=1,Y=.2,Z=.1};update(s,pc,.02);view_tick();local before=values.VR_FarFarReticleTarget;values.UI_FollowView='false';values.UI_Size='.01';values.UI_X_Offset='20';values.UI_OverlayType='1';view_tick();assert(values.VR_FarFarReticleTarget==before)")
+ def test_aim_outside_information_hud_is_not_clipped(self):
+  self.check("local s=built();s.hand.forward={X=1,Y=2,Z=0};update(s,pc,.02);view_tick();local x=tonumber(values.VR_FarFarReticleTarget:match('([^ ]+)'));assert(math.abs(x-5.5)<.001 and s.reticle.set_Visibility==4 and s.images[1].wrapper.set_Visibility==2)")
  def test_cinema_and_idle_restore_original_art(self):
   self.check("local s=built();update(s,pc,.02);view_tick();assert(s.reticle.set_Visibility==4);values.VR_2DScreenMode='true';update(s,pc,.02);assert(s.reticle.set_Visibility==2 and s.images[1].wrapper.set_Visibility==4);values.VR_2DScreenMode='false';hmd=false;update(s,pc,.02);assert(not s.aim_enabled)")
  def test_cleanup_restores_sources_and_releases_anchors(self):
-  self.check("local s=built();cleanup();for _,i in ipairs(s.images)do assert(i.source:GetParent()==root and i.wrapper.removed)end;assert(s.head.destroyed and s.hand.destroyed and s.canvas.removed and values.VR_FarFarGunAimTarget=='')")
+  self.check("local s=built();cleanup();for _,i in ipairs(s.images)do assert(i.source:GetParent()==root and i.wrapper.removed)end;assert(s.head.destroyed and s.hand.destroyed and s.component.destroyed and s.host.removed and values.VR_FarFarReticleTarget=='' and values.VR_FarFarReticleSource=='0')")
  def test_private_lifetime_and_hud_replacement_are_validated(self):
   self.check("local s=built();assert(valid_state(s));s.head.valid=false;assert(not valid_state(s));s.head.valid=true;hud.WidgetTree.RootWidget={};assert(not valid_state(s))")
  def test_temporary_view_failure_rebuilds(self):

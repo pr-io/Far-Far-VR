@@ -31,7 +31,7 @@ download and verify the pinned public UEVR base runtime.
 
 The launcher applies the packaged Far Far VR delta locally using Windows'
 built-in patching API, then verifies that the result exactly matches the
-tested custom engine. No compiler or manual runtime copying is required.
+pinned custom engine. No compiler or manual runtime copying is required.
 
 A delta is not a license exemption. Upstream retains its rights; this package
 must not be described as granting engine redistribution or commercial rights.
@@ -44,7 +44,7 @@ Set-Content -LiteralPath (Join-Path $packageRoot 'UE5.8\README-RUNTIME.txt') -Va
 $patchSource = Join-Path $projectRoot 'Runtime\backend.ffvrdelta'
 if (!(Test-Path -LiteralPath $patchSource)) { throw 'The verified runtime patch is missing.' }
 $patchHash = (Get-FileHash -LiteralPath $patchSource).Hash
-if ($patchHash -ne 'E3CFB3893F70119202591FC1C5CEFB81084A53EDBD2BEEC0BC5BD2D7B70E7A19') { throw 'The runtime patch does not match the current engine.' }
+if ($patchHash -ne '6A4E0FF8FC42E94B0FD5F8C1FBC3C41FFDA846C5B621F3318C89AD65FC41C43D') { throw 'The runtime patch does not match the current engine.' }
 New-Item -ItemType Directory -Path (Join-Path $packageRoot 'Runtime') -Force | Out-Null
 Copy-Item -LiteralPath $patchSource -Destination (Join-Path $packageRoot 'Runtime\backend.ffvrdelta')
 

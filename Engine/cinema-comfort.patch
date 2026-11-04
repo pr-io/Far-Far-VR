@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 6aaf05d0..f8c35db2 100644
+index 6aaf05d0..4bc75661 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1582,6 +1582,17 @@ list(APPEND uevr_SOURCES
+@@ -1582,6 +1582,18 @@ list(APPEND uevr_SOURCES
  	"src/mods/vr/DuneSmartGI.hpp"
  	"src/mods/vr/DuneSmartGIContract.hpp"
  	"src/mods/vr/FFakeStereoRenderingHook.hpp"
@@ -10,6 +10,7 @@ index 6aaf05d0..f8c35db2 100644
 +	"src/mods/vr/FarFarWestConsole.hpp"
 +	"src/mods/vr/FarFarWestControls.hpp"
 +	"src/mods/vr/FarFarWestEffects.hpp"
++	"src/mods/vr/FarFarWestGunLayer.hpp"
 +	"src/mods/vr/FarFarWestMemoryProbe.hpp"
 +	"src/mods/vr/FarFarWestMenu.hpp"
 +	"src/mods/vr/FarFarWestPointer.hpp"
@@ -20,12 +21,6 @@ index 6aaf05d0..f8c35db2 100644
  	"src/mods/vr/GalacticRacerBink.hpp"
  	"src/mods/vr/GalacticRacerBinkCode.hpp"
  	"src/mods/vr/GalacticRacerBinkSeek.hpp"
-diff --git a/dependencies/submodules/UESDK b/dependencies/submodules/UESDK
---- a/dependencies/submodules/UESDK
-+++ b/dependencies/submodules/UESDK
-@@ -1 +1 @@
--Subproject commit 811b01498b61e6a0246615b4f2b4fb4f4067fb64
-+Subproject commit 811b01498b61e6a0246615b4f2b4fb4f4067fb64-dirty
 diff --git a/src/Framework.cpp b/src/Framework.cpp
 index b5c73925..8f8a4643 100644
 --- a/src/Framework.cpp
@@ -350,7 +345,7 @@ index 548d33d5..2630273d 100644
  
      void on_config_load(const utility::Config& cfg, bool set_defaults) override;
 diff --git a/src/mods/VR.cpp b/src/mods/VR.cpp
-index e0f0eb58..719f9402 100644
+index e0f0eb58..c6d16fec 100644
 --- a/src/mods/VR.cpp
 +++ b/src/mods/VR.cpp
 @@ -38,8 +38,10 @@
@@ -364,12 +359,13 @@ index e0f0eb58..719f9402 100644
  #include <sdk/Utility.hpp>
  
  #include <tracy/Tracy.hpp>
-@@ -57,10 +59,22 @@
+@@ -57,10 +59,23 @@
  #include "UObjectHook.hpp"
  #include "GameSpecific.hpp"
  #include "vr/KtjLOpenXRFactory.hpp"
 +#include "vr/FarFarWestMenu.hpp"
 +#include "vr/FarFarWestReticle.hpp"
++#include "vr/FarFarWestGunLayer.hpp"
 +#include <cstdio>
 +#include "LuaLoader.hpp"
  
@@ -387,7 +383,7 @@ index e0f0eb58..719f9402 100644
  }
  
  std::shared_ptr<VR>& VR::get() {
-@@ -82,6 +96,9 @@ bool VR::on_openxr_resolution_scale_changed(
+@@ -82,6 +97,9 @@ bool VR::on_openxr_resolution_scale_changed(
      uint32_t old_height,
      uint32_t new_width,
      uint32_t new_height) {
@@ -397,7 +393,7 @@ index e0f0eb58..719f9402 100644
      bool ue57_invalidated = false;
  
      if (m_fake_stereo_hook != nullptr) {
-@@ -2814,6 +2831,12 @@ bool VR::is_controller_camera_conflict_guard_active() const {
+@@ -2814,6 +2832,12 @@ bool VR::is_controller_camera_conflict_guard_active() const {
  // Called when the mod is initialized
  std::optional<std::string> VR::clean_initialize() try {
      ZoneScopedN(__FUNCTION__);
@@ -410,7 +406,7 @@ index e0f0eb58..719f9402 100644
  
      auto openvr_error = initialize_openvr();
  
-@@ -3532,6 +3555,356 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
+@@ -3532,6 +3556,462 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
      return true;
  }
  
@@ -686,6 +682,10 @@ index e0f0eb58..719f9402 100644
 +    }
 +    if(name=="VR_FarFarGunAimTarget"&&is_farfarwest_executable_cached()){static FarFarGunTargetValue target;return &target;}
 +    if(name=="VR_FarFarGunAim"&&is_farfarwest_executable_cached()){static FarFarGunAimValue aim;return &aim;}
++    if(name=="VR_FarFarReticleSource")return &m_farfar_reticle_source_value;
++    if(name=="VR_FarFarReticleReady")return &m_farfar_reticle_ready_value;
++    if(name=="VR_FarFarReticleActive")return &m_farfar_reticle_active_value;
++    if(name=="VR_FarFarReticleTarget")return &m_farfar_reticle_target_value;
 +    if(name=="VR_FarFarEffectsSource")return &m_farfar_effects_source_value;
 +    if(name=="VR_FarFarEffectsReady")return &m_farfar_effects_ready_value;
 +    if(name=="VR_FarFarEffectsActive")return &m_farfar_effects_active_value;
@@ -732,7 +732,18 @@ index e0f0eb58..719f9402 100644
 +        {std::scoped_lock lock{m_farfar_effects_mtx};if(m_farfar_effects_texture_owner!=m_farfar_effects_source.load())return result;identity=m_farfar_effects_texture;}
 +        if(!sdk::is_current_object(identity))return result;
 +        auto* tex=reinterpret_cast<sdk::UTexture*>(identity.object);
-+        auto* rhi=tex->get_texture_rhi();if(!rhi)return result;
++        auto* rhi=tex->get_texture_rhi();
++        if(!rhi) {
++            static auto next_lookup=std::chrono::steady_clock::time_point{};
++            const auto now=std::chrono::steady_clock::now();
++            if(now<next_lookup)return result;
++            next_lookup=now+std::chrono::seconds(2);
++            if(!sdk::UTexture::update_render_resource_offset_texture2d(tex)) {
++                SPDLOG_ERROR_EVERY_N_SEC(5,"[FarFarVR][Layer] Widget texture resource discovery is not ready");
++                return result;
++            }
++            rhi=tex->get_texture_rhi();if(!rhi)return result;
++        }
 +        auto* native=static_cast<ID3D12Resource*>(rhi->get_native_resource());if(!native)return result;
 +        const auto desc=native->GetDesc();
 +        if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||desc.Width!=1024||desc.Height!=1024||desc.SampleDesc.Count!=1||desc.DepthOrArraySize!=1)return result;
@@ -742,6 +753,97 @@ index e0f0eb58..719f9402 100644
 +    }catch(...){SPDLOG_ERROR_EVERY_N_SEC(5,"[FarFarVR][Effects] Render texture unavailable; original effects retained");}
 +    return result;
 +}
++
++std::string_view VR::FarFarReticleValue::get_config_name_view() const {
++    static constexpr std::string_view names[]={"VR_FarFarReticleSource","VR_FarFarReticleReady","VR_FarFarReticleActive","VR_FarFarReticleTarget"};return names[key];
++}
++void VR::FarFarReticleValue::set(const std::string& value) {
++    if(key==0)owner->m_farfar_reticle_target_valid=false;
++    if(key==0)try {size_t used{};auto n=std::stoull(value,&used);if(used==value.size()){owner->m_farfar_reticle_source=n;owner->m_farfar_reticle_ack=0;}}catch(...){owner->m_farfar_reticle_source=0;owner->m_farfar_reticle_ack=0;}
++    if(key==2)owner->m_farfar_reticle_active=value=="true";
++    if(key==3){
++        const auto target=farfarvr::parse_firing_target(value);
++        std::scoped_lock lock{owner->m_farfar_reticle_mtx};
++        if(target)owner->m_farfar_reticle_target=*target;
++        owner->m_farfar_reticle_target_valid=target.has_value();
++    }
++}
++std::string VR::FarFarReticleValue::get() const {
++    if(key==0)return std::to_string(owner->m_farfar_reticle_source.load());
++    if(key==2)return owner->m_farfar_reticle_active?"true":"false";
++    if(key==3){const auto p=owner->get_farfar_reticle_target();return p?std::format("{} {} {}",p->x,p->y,p->z):"";}
++    const auto source=owner->m_farfar_reticle_source.load();
++    return source&&owner->m_farfar_reticle_target_valid&&owner->m_farfar_reticle_ack==source&&farfar_pointer_now()-owner->m_farfar_reticle_ack_time.load()<250
++        ?std::to_string(source):"0";
++}
++bool VR::can_submit_farfar_reticle() const {
++    return m_farfar_reticle_allowed&&m_farfar_reticle_target_valid&&is_hmd_active()&&!is_using_2d_screen()&&!g_framework->is_drawing_ui();
++}
++std::optional<glm::vec3> VR::get_farfar_reticle_target(){
++    std::scoped_lock lock{m_farfar_reticle_mtx};
++    if(!m_farfar_reticle_target_valid)return std::nullopt;
++    return m_farfar_reticle_target;
++}
++void VR::acknowledge_farfar_reticle(bool ready) {
++    m_farfar_reticle_ack=ready?m_farfar_reticle_source.load():0;
++    m_farfar_reticle_ack_time=farfar_pointer_now();
++}
++void VR::tick_farfar_reticle(sdk::UGameEngine* engine) {
++    m_farfar_reticle_allowed=false;
++    if(!is_farfarwest_executable_cached())return;
++    try {
++        auto* world=engine?engine->get_world():nullptr;auto* ugs=sdk::UGameplayStatics::get();
++        auto* pc=world&&ugs?ugs->get_player_controller(world,0):nullptr;
++        auto* pawn=pc?pc->get_acknowledged_pawn():nullptr;
++        auto* comp=reinterpret_cast<sdk::UObject*>(m_farfar_reticle_source.load());
++        auto identity=sdk::observe_uobject(comp);
++        auto* klass=sdk::find_uobject<sdk::UClass>(L"Class /Script/UMG.WidgetComponent");
++        if(!pc||!pawn||!identity||!klass||!comp->is_a(klass))return;
++        if(pc->get_bool_property(L"bShowMouseCursor")||is_using_2d_screen()||g_framework->is_drawing_ui()||get_farfar_pointer_view().mode.active)return;
++        const auto name=reinterpret_cast<sdk::UObject*>(pawn)->get_class()->get_fname().to_string();
++        if(!name.starts_with(L"BP_Player")&&!name.starts_with(L"BP_Mount_C"))return;
++        struct ObjectReturn{sdk::UObject* value{};} owner{},texture{};
++        auto* of=comp->get_class()->find_function(L"GetOwner");auto* tf=comp->get_class()->find_function(L"GetRenderTarget");
++        if(!of||!tf||of->get_properties_size()>sizeof(owner)||tf->get_properties_size()>sizeof(texture))return;
++        comp->process_event(of,&owner);if(owner.value!=reinterpret_cast<sdk::UObject*>(pawn))return;
++        comp->process_event(tf,&texture);
++        const auto tex=sdk::observe_uobject(texture.value);if(!tex)return;
++        auto* target=sdk::find_uobject<sdk::UClass>(L"Class /Script/Engine.TextureRenderTarget2D");
++        if(!target||!texture.value->is_a(target))return;
++        {std::scoped_lock lock{m_farfar_reticle_mtx};m_farfar_reticle_texture=tex->identity;m_farfar_reticle_texture_owner=reinterpret_cast<uintptr_t>(comp);}
++        m_farfar_reticle_allowed=get_runtime()->is_openxr()&&get_runtime()->ready()&&is_hmd_active();
++    }catch(...){SPDLOG_ERROR_EVERY_N_SEC(5,"[FarFarVR][Reticle] Effects component validation failed; original effects retained");}
++}
++Microsoft::WRL::ComPtr<ID3D12Resource> VR::get_farfar_reticle_texture() {
++    Microsoft::WRL::ComPtr<ID3D12Resource> result;
++    if(!can_submit_farfar_reticle())return result;
++    try {
++        sdk::object_liveness::Identity identity{};
++        {std::scoped_lock lock{m_farfar_reticle_mtx};if(m_farfar_reticle_texture_owner!=m_farfar_reticle_source.load())return result;identity=m_farfar_reticle_texture;}
++        if(!sdk::is_current_object(identity))return result;
++        auto* tex=reinterpret_cast<sdk::UTexture*>(identity.object);
++        auto* rhi=tex->get_texture_rhi();
++        if(!rhi) {
++            static auto next_lookup=std::chrono::steady_clock::time_point{};
++            const auto now=std::chrono::steady_clock::now();
++            if(now<next_lookup)return result;
++            next_lookup=now+std::chrono::seconds(2);
++            if(!sdk::UTexture::update_render_resource_offset_texture2d(tex)) {
++                SPDLOG_ERROR_EVERY_N_SEC(5,"[FarFarVR][Layer] Widget texture resource discovery is not ready");
++                return result;
++            }
++            rhi=tex->get_texture_rhi();if(!rhi)return result;
++        }
++        auto* native=static_cast<ID3D12Resource*>(rhi->get_native_resource());if(!native)return result;
++        const auto desc=native->GetDesc();
++        if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||desc.Width!=256||desc.Height!=256||desc.SampleDesc.Count!=1||desc.DepthOrArraySize!=1)return result;
++        Microsoft::WRL::ComPtr<ID3D12Device> device;
++        if(FAILED(native->GetDevice(IID_PPV_ARGS(&device)))||device.Get()!=g_framework->get_d3d12_hook()->get_device())return result;
++        result=native;
++    }catch(...){SPDLOG_ERROR_EVERY_N_SEC(5,"[FarFarVR][Reticle] Render texture unavailable; original effects retained");}
++    return result;
++}
++
 +
 +void VR::update_farfarvr_controls() {
 +    if (!is_farfarwest_executable_cached()) return;
@@ -767,7 +869,7 @@ index e0f0eb58..719f9402 100644
  void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
      ZoneScopedN(__FUNCTION__);
  
-@@ -3609,6 +3982,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
+@@ -3609,6 +4089,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
      auto runtime = get_runtime();
  
      auto do_pause_select = [&]() {
@@ -775,7 +877,7 @@ index e0f0eb58..719f9402 100644
          if (!runtime->ready()) {
              return;
          }
-@@ -3655,7 +4029,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
+@@ -3655,7 +4136,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
      const auto right_joystick = get_right_joystick();
      const auto wants_swap = m_swap_controllers->value();
  
@@ -784,7 +886,7 @@ index e0f0eb58..719f9402 100644
      do_pause_select();
  
      const auto is_right_a_button_down = is_gamepad_face_action_active(m_action_a_button_right, m_action_a_button_left);
-@@ -3924,6 +4298,27 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
+@@ -3924,6 +4405,27 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
          }
      }
      
@@ -812,7 +914,7 @@ index e0f0eb58..719f9402 100644
      // Do it again after all the VR buttons have been spoofed
      update_imgui_state_from_xinput_state(*state, true);
  }
-@@ -3967,7 +4362,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
+@@ -3967,7 +4469,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
      }
  
      // L3 + R3 to open the menu
@@ -821,7 +923,7 @@ index e0f0eb58..719f9402 100644
          if (!FrameworkConfig::get()->is_enable_l3_r3_toggle()) {
              return;
          }
-@@ -4000,7 +4395,9 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
+@@ -4000,7 +4502,9 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
  
      // We need to adjust the stick values based on the selected movement orientation value if the user wants to do this
      // It will either need to be adjusted by the HMD rotation or one of the controllers.
@@ -832,7 +934,7 @@ index e0f0eb58..719f9402 100644
          const auto left_stick_og = glm::vec2((float)state.Gamepad.sThumbLX, (float)state.Gamepad.sThumbLY );
          const auto left_stick_magnitude = glm::clamp(glm::length(left_stick_og), -32767.0f, 32767.0f);
          const auto left_stick = glm::normalize(left_stick_og);
-@@ -4064,7 +4461,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
+@@ -4064,7 +4568,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
          io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
  
          // Headlocked aim toggle
@@ -841,7 +943,7 @@ index e0f0eb58..719f9402 100644
              if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0 && (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0) {
                  if (!m_xinput_context.headlocked_begin_held) {
                      m_xinput_context.headlocked_begin = std::chrono::steady_clock::now();
-@@ -4204,7 +4601,12 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
+@@ -4204,7 +4708,12 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
          MAP_BUTTON(ImGuiKey_GamepadFaceLeft,        XINPUT_GAMEPAD_X);
          MAP_BUTTON(ImGuiKey_GamepadFaceRight,       XINPUT_GAMEPAD_B);
          MAP_BUTTON(ImGuiKey_GamepadFaceUp,          XINPUT_GAMEPAD_Y);
@@ -855,13 +957,14 @@ index e0f0eb58..719f9402 100644
          MAP_BUTTON(ImGuiKey_GamepadDpadLeft,        XINPUT_GAMEPAD_DPAD_LEFT);
          MAP_BUTTON(ImGuiKey_GamepadDpadRight,       XINPUT_GAMEPAD_DPAD_RIGHT);
          MAP_BUTTON(ImGuiKey_GamepadDpadUp,          XINPUT_GAMEPAD_DPAD_UP);
-@@ -4975,6 +5377,43 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+@@ -4975,6 +5484,44 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
          }
      }
  
 +    if (is_farfarwest_executable_cached() && g_framework->is_game_data_intialized()) {
 +        tick_farfar_pointer(engine);
 +        tick_farfar_effects(engine);
++        tick_farfar_reticle(engine);
 +        bool emote_active{},cancel_emote{};
 +        {
 +            std::scoped_lock lock{m_farfar_controls_mtx};
@@ -899,7 +1002,7 @@ index e0f0eb58..719f9402 100644
      if (!get_runtime()->loaded || !is_hmd_active()) {
          return;
      }
-@@ -5003,6 +5442,7 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+@@ -5003,6 +5550,7 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
      // TODO: fix this for actual AFR, but we dont really care about pure AFR since synced beats it most of the time
      if (m_fake_stereo_hook != nullptr && !m_fake_stereo_hook->is_ignoring_next_viewport_draw()) {
          update_action_states();
@@ -907,7 +1010,7 @@ index e0f0eb58..719f9402 100644
          update_imgui_state_from_vr_controller_fallback();
      }
  }
-@@ -8363,8 +8803,61 @@ void VR::handle_keybinds() {
+@@ -8363,8 +8911,61 @@ void VR::handle_keybinds() {
      }
  }
  
@@ -969,7 +1072,7 @@ index e0f0eb58..719f9402 100644
  
      m_last_mod_frame = std::chrono::steady_clock::now();
      m_cvar_manager->on_frame();
-@@ -8581,6 +9074,7 @@ void VR::on_present() {
+@@ -8581,6 +9182,7 @@ void VR::on_present() {
          // On the first ever submit, we need to activate the window and set the mouse to the center
          // so the user doesn't have to click on the window to get input.
          if (m_first_submit) {
@@ -977,7 +1080,7 @@ index e0f0eb58..719f9402 100644
              m_first_submit = false;
              const auto skip_initial_mouse_warp = is_ue418_executable() && should_skip_post_init_properties();
  
-@@ -10484,3 +10978,18 @@ void VR::update_statistics_overlay(sdk::UGameEngine* engine) {
+@@ -10484,3 +11086,18 @@ void VR::update_statistics_overlay(sdk::UGameEngine* engine) {
          m_show_statistics_state = m_show_statistics->value();
      }
  }
@@ -997,7 +1100,7 @@ index e0f0eb58..719f9402 100644
 +    }
 +}
 diff --git a/src/mods/VR.hpp b/src/mods/VR.hpp
-index 4be5c378..2bcc2036 100644
+index 4be5c378..455652c5 100644
 --- a/src/mods/VR.hpp
 +++ b/src/mods/VR.hpp
 @@ -34,6 +34,8 @@
@@ -1009,7 +1112,7 @@ index 4be5c378..2bcc2036 100644
  
  #undef max
  #include <tracy/Tracy.hpp>
-@@ -41,6 +43,48 @@
+@@ -41,6 +43,73 @@
  class VR : public Mod {
  public:
      nlohmann::json get_support_diagnostics();
@@ -1055,10 +1158,35 @@ index 4be5c378..2bcc2036 100644
 +    Microsoft::WRL::ComPtr<ID3D12Resource> get_farfar_effects_texture();
 +    void acknowledge_farfar_effects(bool ready);
 +    bool can_submit_farfar_effects() const;
++    struct FarFarReticleValue : IModValue {
++        VR* owner;unsigned key;
++        FarFarReticleValue(VR* v,unsigned k):owner(v),key(k){}
++        bool draw(std::string_view) override{return false;} void draw_value(std::string_view) override{}
++        void config_load(const utility::Config&,bool) override{} void config_save(utility::Config&) override{}
++        void set(const std::string&) override;std::string get() const override;
++        std::string get_config_name() const override{return std::string(get_config_name_view());}
++        std::string_view get_config_name_view() const override;
++    };
++    mutable FarFarReticleValue m_farfar_reticle_source_value{this,0},m_farfar_reticle_ready_value{this,1},m_farfar_reticle_active_value{this,2},m_farfar_reticle_target_value{this,3};
++    std::atomic<uintptr_t> m_farfar_reticle_source{},m_farfar_reticle_ack{};
++    std::atomic<int64_t> m_farfar_reticle_ack_time{};
++    std::atomic<bool> m_farfar_reticle_active{},m_farfar_reticle_allowed{};
++    std::atomic<bool> m_farfar_reticle_target_valid{};
++    glm::vec3 m_farfar_reticle_target{};
++    std::mutex m_farfar_reticle_mtx{};
++    sdk::object_liveness::Identity m_farfar_reticle_texture{};
++    uintptr_t m_farfar_reticle_texture_owner{};
++    void tick_farfar_reticle(sdk::UGameEngine* engine);
++    Microsoft::WRL::ComPtr<ID3D12Resource> get_farfar_reticle_texture();
++    void acknowledge_farfar_reticle(bool ready);
++    bool can_submit_farfar_reticle() const;
++    std::optional<glm::vec3> get_farfar_reticle_target();
++
++
      ~VR() override;
  
      enum RenderingMethod {
-@@ -354,6 +398,9 @@ public:
+@@ -354,6 +423,9 @@ public:
          return runtime->ready() || (m_stereo_emulation_mode && runtime->loaded);
      }
  
@@ -1226,7 +1354,7 @@ index c2732801..d373db26 100644
  };
  } // namespace vrmod
 diff --git a/src/mods/vr/D3D12Component.cpp b/src/mods/vr/D3D12Component.cpp
-index f7d4f3e3..fa6fe640 100644
+index f7d4f3e3..abfc8d05 100644
 --- a/src/mods/vr/D3D12Component.cpp
 +++ b/src/mods/vr/D3D12Component.cpp
 @@ -13,6 +13,7 @@
@@ -1245,16 +1373,17 @@ index f7d4f3e3..fa6fe640 100644
  
  #include "shaders/Compiled/alpha_luminance_sprite_ps_SpritePixelShader.inc"
  #include "shaders/Compiled/alpha_luminance_sprite_ps_SpriteVertexShader.inc"
-@@ -31,6 +33,8 @@
+@@ -31,6 +33,9 @@
  #include "d3d12/DirectXTK.hpp"
  
  #include "D3D12Component.hpp"
 +#include "FarFarWestEffects.hpp"
++#include "FarFarWestGunLayer.hpp"
 +#include "FarFarWestResolution.hpp"
  #include "GalacticRacerRenderTargets.hpp"
  
  //#define AFR_DEPTH_TEMP_DISABLED
-@@ -227,6 +231,14 @@ bool is_shf_current_game() {
+@@ -227,6 +232,14 @@ bool is_shf_current_game() {
      return result;
  }
  
@@ -1269,7 +1398,7 @@ index f7d4f3e3..fa6fe640 100644
  bool shf_texture_diagnostics_enabled() {
      const auto vr = VR::get();
      return vr != nullptr && vr->get_fake_stereo_hook() != nullptr &&
-@@ -2070,7 +2082,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -2070,7 +2083,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
      const auto debug_skip_ui_copy = openxr_runtime != nullptr && openxr_runtime->debug_skip_ui_copy->value();
      const auto debug_disable_depth_submit = openxr_runtime != nullptr && openxr_runtime->debug_disable_depth_submit->value();
      auto suppress_scene_copy = debug_submit_empty_frame || debug_skip_scene_copy;
@@ -1278,7 +1407,7 @@ index f7d4f3e3..fa6fe640 100644
  
      if (is_dune_external_backbuffer && runtime->is_openxr()) {
          const auto adopted_desc = backbuffer->GetDesc();
-@@ -2097,6 +2109,20 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -2097,6 +2110,20 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
      auto is_left_eye_frame = is_afr && vr->m_render_frame_count % 2 == vr->m_left_eye_interval;
      auto is_right_eye_frame = !is_afr || vr->m_render_frame_count % 2 == vr->m_right_eye_interval;
      const auto scene_source_desc = backbuffer->GetDesc();
@@ -1299,7 +1428,7 @@ index f7d4f3e3..fa6fe640 100644
      const bool dead_island_2_synced_mode =
          is_dead_island_2_ue425_current_game() &&
          runtime->is_openxr() &&
-@@ -2944,6 +2970,20 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -2944,6 +2971,20 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
          native_stereo_packet.reset();
      }
  
@@ -1320,7 +1449,7 @@ index f7d4f3e3..fa6fe640 100644
      const auto nascar25_native_copy_states = uevr::nascar::title25::native_copy_source_states(
          uevr::nascar::is_title25(), uevr::nascar::title25::is_validated_build(), g_framework->is_dx12(),
          native_stereo_packet != nullptr && vr->is_nascar_native_stereo_fix_requested(),
-@@ -3536,6 +3576,23 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -3536,6 +3577,23 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
          m_game_tex.texture.Get() != nullptr &&
          m_game_tex.srv_heap != nullptr;
      const auto is_2d_screen = vr->is_using_2d_screen();
@@ -1344,7 +1473,7 @@ index f7d4f3e3..fa6fe640 100644
      const auto shf_auto_2d_screen =
          SHF_AUTO_2D_SCREEN_FROM_MONO_CINEMATIC &&
          is_shf_external_backbuffer &&
-@@ -3640,6 +3697,45 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -3640,6 +3698,45 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
              RECT right_source_rect{(LONG)((float)m_backbuffer_size[0] / 2.0f), 0, (LONG)((float)m_backbuffer_size[0]), (LONG)m_backbuffer_size[1]};
              std::optional<RECT> screen_dest_rect = std::nullopt;
  
@@ -1390,7 +1519,7 @@ index f7d4f3e3..fa6fe640 100644
              if (use_mono_flat_screen_source) {
                  const auto source_width = (LONG)view_desc.Width;
                  const auto source_height = (LONG)view_desc.Height;
-@@ -3824,7 +3920,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -3824,7 +3921,10 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                          commands.cmd_list.Get(),
                          *screen_source_tex,
                          m_2d_screen_tex[1],
@@ -1402,7 +1531,7 @@ index f7d4f3e3..fa6fe640 100644
                          screen_dest_rect,
                          ENGINE_SRC_COLOR,
                          ENGINE_SRC_COLOR
-@@ -3999,7 +4098,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -3999,7 +4099,7 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
  
                  auto fw_rt = g_framework->get_rendertarget_d3d12();
  
@@ -1411,7 +1540,7 @@ index f7d4f3e3..fa6fe640 100644
                      if (is_ue58_runtime_cached()) {
                          m_openxr.copy_framework_ui_ue58(
                              fw_rt.Get(),
-@@ -4322,7 +4421,20 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -4322,7 +4422,20 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                  }
              } else {
                  // Copy over the entire double wide, or submit native stereo as texture-array slices.
@@ -1433,7 +1562,7 @@ index f7d4f3e3..fa6fe640 100644
                      SPDLOG_INFO_EVERY_N_SEC(2, "[OpenXR][debug] Skipping double-wide scene copy for perf isolation");
                      if (!debug_submit_empty_frame) {
                          m_openxr.copy((uint32_t)runtimes::OpenXR::SwapchainIndex::DOUBLE_WIDE, nullptr, scene_source_state, nullptr);
-@@ -4586,23 +4698,36 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -4586,23 +4699,36 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                          "[SHf][D3D12] Submitting auto 2D screen as eye-specific OpenXR slate layers");
                  }
  
@@ -1480,7 +1609,7 @@ index f7d4f3e3..fa6fe640 100644
                          quad_layers.size());
                  }
              } else if (!suppress_ui_copy && m_openxr.ever_acquired((uint32_t)runtimes::OpenXR::SwapchainIndex::UI)) {
-@@ -4627,12 +4752,57 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -4627,12 +4753,85 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
                  }
              }
  
@@ -1523,6 +1652,34 @@ index f7d4f3e3..fa6fe640 100644
 +                }
 +            }
 +
++            XrCompositionLayerQuad farfar_reticle_layer{XR_TYPE_COMPOSITION_LAYER_QUAD};
++            bool farfar_reticle_valid=false;
++            if(is_far_far_west_current_game()&&vr->can_submit_farfar_reticle()&&!m_farfar_resume_pending) {
++                const auto source=vr->get_farfar_reticle_texture();
++                if(source&&m_openxr.ensure_farfar_reticle_swapchain(source->GetDesc())) {
++                    const auto index=farfarvr::reticle_swapchain;
++                    const bool warmup=!m_openxr.ever_acquired(index);
++                    farfar_reticle_valid=((!warmup&&!vr->m_farfar_reticle_active)||m_openxr.copy(index,source.Get(),std::nullopt,std::nullopt,ENGINE_SRC_COLOR))&&m_openxr.ever_acquired(index);
++                    if(farfar_reticle_valid&&vr->m_farfar_reticle_active) {
++                        // Lua samples the actual firing camera after the per-view
++                        // attachment update. Preserve that ray in its own quad;
++                        // raw controller origin/rotation is not the game's shot ray.
++                        const auto local=vr->get_farfar_reticle_target();
++                        if(!local)farfar_reticle_valid=false;
++                        farfar_reticle_layer.layerFlags=XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
++                        farfar_reticle_layer.space=vr->m_openxr->view_space;
++                        farfar_reticle_layer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
++                        farfar_reticle_layer.subImage.swapchain=vr->m_openxr->swapchains[index].handle;
++                        farfar_reticle_layer.subImage.imageRect={{0,0},{256,256}};
++                        farfar_reticle_layer.pose.position=runtimes::OpenXR::to_openxr(local.value_or(glm::vec3{}));
++                        farfar_reticle_layer.pose.orientation=XrQuaternionf{0,0,0,1};
++                        farfar_reticle_layer.size={.475f/std::max(.1f,vr->get_world_scale()),.475f/std::max(.1f,vr->get_world_scale())};
++                        if(local)quad_layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&farfar_reticle_layer));
++                    }
++                }
++            }
++
++
 +            if (m_farfar_resume_pending && m_farfar_last_cinema) {
 +                quad_layers.clear();
 +                quad_layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&*m_farfar_last_cinema));
@@ -1539,7 +1696,7 @@ index f7d4f3e3..fa6fe640 100644
              record_native_submit(frame_diag::Runtime::openxr, frame_diag::Stage::submit_result, static_cast<int32_t>(result));
  
              if (result == XR_ERROR_LAYER_INVALID) {
-@@ -4642,12 +4812,13 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
+@@ -4642,12 +4841,14 @@ vr::EVRCompositorError D3D12Component::on_frame(VR* vr) {
  
                  spdlog::info("[VR] Calling xrEndFrame again");
                  record_native_submit(frame_diag::Runtime::openxr, frame_diag::Stage::submit_attempt, 0, 2, 1);
@@ -1551,10 +1708,11 @@ index f7d4f3e3..fa6fe640 100644
              vr->m_openxr->needs_pose_update = true;
              vr->m_submitted = result == XR_SUCCESS;
 +            if(is_far_far_west_current_game())vr->acknowledge_farfar_effects(farfar_effects_valid&&result==XR_SUCCESS);
++            if(is_far_far_west_current_game())vr->acknowledge_farfar_reticle(farfar_reticle_valid&&result==XR_SUCCESS);
          }
  
          ////////////////////////////////////////////////////////////////////////////////
-@@ -5406,6 +5577,10 @@ void D3D12Component::on_post_present(VR* vr) {
+@@ -5406,6 +5607,10 @@ void D3D12Component::on_post_present(VR* vr) {
  }
  
  void D3D12Component::on_reset(VR* vr) {
@@ -1565,7 +1723,7 @@ index f7d4f3e3..fa6fe640 100644
      m_force_reset = true;
      reset_frame_timing_stats();
      m_frame_timing_collection_active = false;
-@@ -5736,7 +5911,10 @@ bool D3D12Component::setup() {
+@@ -5736,7 +5941,10 @@ bool D3D12Component::setup() {
          }
      }
  
@@ -1577,7 +1735,7 @@ index f7d4f3e3..fa6fe640 100644
          m_backbuffer_size[0] = backbuffer_desc.Width * 2;
      } else {
          m_backbuffer_size[0] = backbuffer_desc.Width;
-@@ -5827,6 +6005,53 @@ void D3D12Component::OpenXR::initialize(XrSessionCreateInfo& session_info) {
+@@ -5827,6 +6035,101 @@ void D3D12Component::OpenXR::initialize(XrSessionCreateInfo& session_info) {
      session_info.next = &this->binding;
  }
  
@@ -1628,10 +1786,58 @@ index f7d4f3e3..fa6fe640 100644
 +    return true;
 +}
 +
++bool D3D12Component::OpenXR::ensure_farfar_reticle_swapchain(const D3D12_RESOURCE_DESC& desc) {
++    const auto index=farfarvr::reticle_swapchain;
++    auto vr=VR::get();auto xr=vr->m_openxr;
++    if(!xr||!xr->session||desc.Width!=256||desc.Height!=256)return false;
++    std::scoped_lock lock{this->mtx};
++    std::scoped_lock runtime_swapchain_lock{xr->swapchain_mtx};
++    if(auto it=xr->swapchains.find(index);it!=xr->swapchains.end()) {
++        const auto ctx=this->contexts.find(index);
++        if(ctx==this->contexts.end()||ctx->second.textures.empty()||!ctx->second.textures[0].texture)return false;
++        const auto target=ctx->second.textures[0].texture->GetDesc();
++        const auto family=[](DXGI_FORMAT f){
++            if(f==DXGI_FORMAT_B8G8R8A8_TYPELESS||f==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)return DXGI_FORMAT_B8G8R8A8_UNORM;
++            if(f==DXGI_FORMAT_R8G8B8A8_TYPELESS||f==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)return DXGI_FORMAT_R8G8B8A8_UNORM;
++            if(f==DXGI_FORMAT_R16G16B16A16_TYPELESS)return DXGI_FORMAT_R16G16B16A16_FLOAT;
++            return f;
++        };
++        return target.Width==desc.Width&&target.Height==desc.Height&&family(target.Format)==family(desc.Format);
++    }
++    static auto next_try=std::chrono::steady_clock::time_point{};
++    if(std::chrono::steady_clock::now()<next_try)return false;
++    next_try=std::chrono::steady_clock::now()+std::chrono::seconds(2);
++    auto format=desc.Format;
++    if(format==DXGI_FORMAT_B8G8R8A8_TYPELESS)format=DXGI_FORMAT_B8G8R8A8_UNORM;
++    if(format==DXGI_FORMAT_R8G8B8A8_TYPELESS)format=DXGI_FORMAT_R8G8B8A8_UNORM;
++    if(format==DXGI_FORMAT_R16G16B16A16_TYPELESS)format=DXGI_FORMAT_R16G16B16A16_FLOAT;
++    XrSwapchainCreateInfo info{XR_TYPE_SWAPCHAIN_CREATE_INFO};info.arraySize=1;info.format=format;
++    info.width=256;info.height=256;info.mipCount=info.faceCount=info.sampleCount=1;
++    info.usageFlags=XR_SWAPCHAIN_USAGE_SAMPLED_BIT|XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT|XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
++    runtimes::OpenXR::Swapchain chain{};chain.width=256;chain.height=256;
++    auto result=xrCreateSwapchain(xr->session,&info,&chain.handle);
++    if(result!=XR_SUCCESS){SPDLOG_ERROR_EVERY_N_SEC(5,"[FarFarVR][Reticle] Effects swapchain creation failed: {}",int(result));return false;}
++    uint32_t count{};
++    result=xrEnumerateSwapchainImages(chain.handle,0,&count,nullptr);
++    if(result!=XR_SUCCESS||count==0){xrDestroySwapchain(chain.handle);return false;}
++    auto& ctx=this->contexts[index];ctx.textures.resize(count);ctx.texture_contexts.resize(count);
++    for(uint32_t i=0;i<count;++i) {
++        ctx.textures[i]={XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR};
++        ctx.texture_contexts[i]=std::make_unique<d3d12::TextureContext>();
++        if(!ctx.texture_contexts[i]->commands.setup(L"Far Far VR gun reticle")){this->contexts.erase(index);xrDestroySwapchain(chain.handle);return false;}
++    }
++    result=xrEnumerateSwapchainImages(chain.handle,count,&count,reinterpret_cast<XrSwapchainImageBaseHeader*>(ctx.textures.data()));
++    if(result!=XR_SUCCESS){this->contexts.erase(index);xrDestroySwapchain(chain.handle);return false;}
++    xr->swapchains[index]=chain;
++    SPDLOG_INFO("[FarFarVR][Reticle] Independent 256x256 effects swapchain ready, format {}",int(format));
++    return true;
++}
++
++
  std::optional<std::string> D3D12Component::OpenXR::create_swapchains() {
      std::scoped_lock _{this->mtx};
  
-@@ -6862,4 +7087,80 @@ bool D3D12Component::OpenXR::copy(
+@@ -6862,4 +7165,80 @@ bool D3D12Component::OpenXR::copy(
      ctx.ever_acquired = true;
      return !texture_ctx->commands.poisoned && (!retained_stalker_pair || stalker_enqueued);
  }
@@ -1713,7 +1919,7 @@ index f7d4f3e3..fa6fe640 100644
 +}
  } // namespace vrmod
 diff --git a/src/mods/vr/D3D12Component.hpp b/src/mods/vr/D3D12Component.hpp
-index b007e7fb..d3666664 100644
+index b007e7fb..45cf7668 100644
 --- a/src/mods/vr/D3D12Component.hpp
 +++ b/src/mods/vr/D3D12Component.hpp
 @@ -1,6 +1,7 @@
@@ -1744,15 +1950,16 @@ index b007e7fb..d3666664 100644
  
      const auto& get_backbuffer_size() const { return m_backbuffer_size; }
  
-@@ -342,6 +349,7 @@ private:
+@@ -342,6 +349,8 @@ private:
      struct OpenXR {
          void initialize(XrSessionCreateInfo& session_info);
          std::optional<std::string> create_swapchains();
 +        bool ensure_farfar_effects_swapchain(const D3D12_RESOURCE_DESC& desc);
++        bool ensure_farfar_reticle_swapchain(const D3D12_RESOURCE_DESC& desc);
          void destroy_swapchains();
          bool pre_acquire(uint32_t swapchain_idx);
          void release_acquired(uint32_t swapchain_idx);
-@@ -434,11 +442,19 @@ private:
+@@ -434,11 +443,19 @@ private:
      uint32_t m_backbuffer_size[2]{};
  
      uint32_t m_last_rendered_frame{0};

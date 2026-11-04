@@ -4,7 +4,7 @@ This is a preservation inventory for changes across chats. Presence in source or
 
 | Area | Features to retain | Owning implementation |
 | --- | --- | --- |
-| Aiming and crosshair | Tracked-hand weapon aim; firearm/minigun and empty-hand handling; original animated crosshair, hit X and shield-hit artwork; per-view firing-ray projection | `Profile/scripts/farfarvr_hud.lua`, native reticle and pointer policies |
+| Aiming and crosshair | Tracked-hand weapon aim; firearm/minigun and empty-hand handling; original animated crosshair, hit X and shield-hit artwork on an independent compositor texture; per-view firing-ray targeting | `Profile/scripts/farfarvr_hud.lua`, native reticle and pointer policies |
 | Effects | Independent face-covering dash, shooting, healing, shield and damage effects; directional damage relative to head orientation; original-effects fallback | `Profile/scripts/farfarvr_effects.lua`, native effects compositor |
 | Objectives | Head-projected world markers, ownerless lobby markers and stale-marker cleanup | `Profile/scripts/farfarvr_objectives.lua` |
 | Controls | Start tap/game menu and hold/VR menu; map/ping tap/hold; weapon switch/push-to-talk tap/hold; two-stick emote/battle-cry actions; A confirmation; cursor pointing/trigger selection and stick navigation takeover | `Engine/FarFarWestControls.hpp`, native input/pointer handling, `Launcher/SocialBindings.cs`, profile action/binding files |

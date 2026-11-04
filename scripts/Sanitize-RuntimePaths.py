@@ -11,7 +11,7 @@ import re
 import struct
 from pathlib import Path
 
-SOURCE_SHA256 = 'E784A9946B924FEDCB7A174473EA6DB784399AE40BCFBB6F2FE94E2DC10096C0'
+SOURCE_SHA256 = '9744A43DED4B2662B832A6DDC2E4D0669D6B8DBB366A700925BB6789487DAF23'
 
 
 def shader_digest(data):
@@ -102,7 +102,7 @@ def sanitize(data):
         sections.append((start, start + size, flags))
     result = bytearray(data)
     edits = 0
-    for match in re.finditer(rb'[A-Za-z]:\\Users\\[^\\\x00\r\n]+(?=\\)', data, re.IGNORECASE):
+    for match in re.finditer(rb'[A-Za-z]:[\\/]Users[\\/][^\\/\x00\r\n]+(?=[\\/])', data, re.IGNORECASE):
         if not any(start <= match.start() and match.end() <= end and
                    not flags & 0xA0000000 and flags & 0x40000000
                    for start, end, flags in sections):
@@ -112,12 +112,12 @@ def sanitize(data):
             raise ValueError('Replacement would resize the image.')
         result[match.start():match.end()] = replacement
         edits += 1
-    if not edits or re.search(rb'[A-Za-z]:\\Users\\', result, re.IGNORECASE):
+    if not edits or re.search(rb'[A-Za-z]:[\\/]Users[\\/]', result, re.IGNORECASE):
         raise ValueError('Sanitization did not remove every local profile root.')
     # Read-only data also contains compiled GPU programs. Metadata inside a
     # DXBC container is covered by its digest even though .text is unchanged.
     repaired = repair_shader_containers(data, result)
-    if repaired != 2:
+    if repaired != 7:
         raise ValueError('Unexpected number of shader metadata containers.')
     for start, end, flags in sections:
         if flags & 0x20000000 and data[start:end] != result[start:end]:
