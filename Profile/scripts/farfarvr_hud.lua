@@ -8,6 +8,10 @@ local possessed_pawn
 local scan_time=0
 local retry_time,stage=0,'startup'
 local recover_hud
+local last_status
+local function status(message)
+    if message~=last_status then last_status=message; pcall(fs.write,'farfarvr-hud-status.txt',message) end
+end
 local obj_cache = {}
 local function find(path)
     local obj = obj_cache[path]
@@ -33,6 +37,14 @@ local function alive(o)
     if o==nil then return false end
     local ok,exists=pcall(UEVR_UObjectHook.exists,o)
     return ok and exists
+end
+local function local_hud(hud,pc)
+    if not alive(hud) then return false end
+    local owner=hud:GetOwningPlayer()
+    if owner~=nil and owner~=pc then return false end
+    -- User widgets embedded in the gameplay HUD need not be added directly to
+    -- the viewport or have an explicit owning player.
+    return hud:IsInViewport() or (alive(hud:GetParent()) and hud:IsVisible())
 end
 local function restore_title()
     if title_camera and (alive(title_camera) or api:get_local_pawn(0)==title_owner) then
@@ -141,10 +153,10 @@ local function build(pawn,pc,hud)
         end
     end
     assert(#s.images>0,'No original reticle artwork found');sync_images(s)
-    health.set('HUD','Active'); fault=nil;log('Restored per-view firing-ray renderer for crosshair, hit X and hands; no offscreen target or readiness handshake.')
+    health.set('HUD','Prepared'); status('Prepared: waiting for a tracked gameplay render view'); fault=nil;log('Restored per-view firing-ray renderer for crosshair, hit X and hands; no offscreen target or readiness handshake.')
 end
 local function valid_state(s)
-    if not alive(s.hud) or not s.hud:IsInViewport() or s.hud.WidgetTree.RootWidget~=s.root or not alive(s.canvas) or not alive(s.reticle) or not alive(s.head) or not alive(s.hand) then return false end
+    if not local_hud(s.hud,s.pc) or s.hud.WidgetTree.RootWidget~=s.root or not alive(s.canvas) or not alive(s.reticle) or not alive(s.head) or not alive(s.hand) then return false end
     for _,item in ipairs(s.images) do if not alive(item.source) or not alive(item.clone) or not alive(item.wrapper) or not item.source.Slot then return false end end
     return true
 end
@@ -152,7 +164,10 @@ local function update(s,pc,dt)
     s.animation_time=s.animation_time+dt
     local visible=vr.is_runtime_ready() and vr.is_hmd_active() and vr:get_mod_value('VR_2DScreenMode')~='true' and not pc.bShowMouseCursor and not uevr.params.functions.is_drawing_ui()
     s.aim_enabled=visible
-    if not visible then show_marker(s,false) end
+    if not visible then
+        show_marker(s,false)
+        status('Paused: cursor='..tostring(pc.bShowMouseCursor)..'; VR menu='..tostring(uevr.params.functions.is_drawing_ui())..'; cinema='..tostring(vr:get_mod_value('VR_2DScreenMode')))
+    end
     if s.dirty or (visible and s.animation_time>=1/60) then
         sync_images(s);s.animation_time=0;s.dirty=false
     end
@@ -179,7 +194,7 @@ local function render_aim(s)
             end
         end
     end
-    local aim_method=tonumber(vr:get_mod_value('VR_AimMethod')) or 2
+    local aim_method=tonumber(vr:get_mod_value('VR_AimMethod')) or 0
     local hand_index=(aim_method==3 or aim_method==5) and 0 or 1
     if s.hand_index~=hand_index then UEVR_UObjectHook.get_or_add_motion_controller_state(s.hand):set_hand(hand_index); s.hand_index=hand_index end
     local drawn=false
@@ -198,7 +213,12 @@ local function render_aim(s)
     end
     local firearm=drawn
     local start,direction
-    if firearm then
+    if aim_method>=2 and aim_method<=5 then
+        -- The render camera can already contain the head-view override here.
+        -- Controller aiming must use the tracked aim anchor, not that camera.
+        start=s.hand:K2_GetComponentLocation();direction=s.hand:GetForwardVector()
+        s.aim_source=hand_index==0 and 'tracked left hand' or 'tracked right hand'
+    elseif firearm then
         local camera=assert(s.pc.PlayerCameraManager,'Firing camera unavailable')
         start=camera:K2_GetActorLocation();direction=camera:GetActorForwardVector()
         s.aim_source='game firing camera'
@@ -237,6 +257,7 @@ local function render_aim(s)
     end
     s.reticle_slot:SetPosition(xy(x,y));show_marker(s,true)
     s.aim_updates=(s.aim_updates or 0)+1
+    health.set('HUD','Active');status('Active: per-view artwork from '..s.aim_source)
 end
 pcall(clear_aim)
 uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function()
@@ -287,9 +308,13 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
         if not state then
             scan_time=scan_time+dt;if scan_time<1 then return end;scan_time=0
             local cls=api:find_uobject('WidgetBlueprintGeneratedClass /Game/Interfaces/UI_Player.UI_Player_C')
-            if cls then for _,hud in ipairs(cls:get_objects_matching(false)) do
-                if hud:IsInViewport() and hud:GetOwningPlayer()==pc then stage='private gun layer build';build(pawn,pc,hud);break end
-            end end
+            if cls then
+                local candidates=cls:get_objects_matching(false)
+                for _,hud in ipairs(candidates) do
+                    if local_hud(hud,pc) then stage='private gun layer build';build(pawn,pc,hud);break end
+                end
+                if not state then status(#candidates==0 and 'Waiting: no gameplay HUD instances discovered' or 'Waiting: gameplay HUD is not attached to the local player view') end
+            else status('Waiting: gameplay HUD class is not loaded') end
         end
         stage='private gun artwork';if state then update(state,pc,dt) end
 

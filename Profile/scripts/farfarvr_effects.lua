@@ -7,6 +7,13 @@ local api,vr=uevr.api,uevr.params.vr
 local health=require('farfarvr_health')
 local state,retry,scan_elapsed=nil,0,0
 local obj_cache = {}
+local last_status,last_operating_status,status_elapsed=nil,nil,1
+local function status(message)
+    last_operating_status=message
+    if message~=last_status and status_elapsed>=1 then
+        last_status=message;status_elapsed=0;pcall(fs.write,'farfarvr-effects-status.txt',message)
+    end
+end
 local function find(path)
     local object = obj_cache[path]
     if not object then
@@ -19,6 +26,18 @@ end
 local function alive(o)
     if not o then return false end
     local ok,v=pcall(UEVR_UObjectHook.exists,o);return ok and v
+end
+local function attached(owner)
+    return alive(owner) and (owner:IsInViewport() or (alive(owner:GetParent()) and owner:IsVisible()))
+end
+local redraw_methods=setmetatable({}, {__mode='k'})
+local function redraw(component)
+    -- RequestRenderUpdate also wakes a component whose tick was deferred while
+    -- it had no render target. RequestRedraw alone only sets the redraw flag.
+    local update=redraw_methods[component]
+    if update==nil then update=component:get_class():find_function('RequestRenderUpdate')~=nil;redraw_methods[component]=update end
+    if update then component:RequestRenderUpdate()
+    else component:SetComponentTickEnabled(true);component:RequestRedraw() end
 end
 local function has(o,k) return alive(o) and o:get_class():find_property(k)~=nil end
 local function native(path,values)
@@ -77,7 +96,7 @@ local function install_damage_hooks()
                     local yaw=s.pc.PlayerCameraManager:K2_GetActorRotation().Yaw
                     local damage=api:find_uobject('WidgetBlueprintGeneratedClass /Game/Interfaces/UI_DamageScreen.UI_DamageScreen_C')
                     if damage then for _,widget in ipairs(damage:get_objects_matching(false)) do
-                        if alive(widget) and widget:IsInViewport() and not s.damage_yaw[widget] then
+                        if attached(widget) and not s.damage_yaw[widget] then
                             local pc=widget:GetOwningPlayer()
                             if pc==s.pc or pc==nil then s.damage_yaw[widget]=yaw end
                         end
@@ -91,7 +110,7 @@ end
 local function build(pawn,pc)
     local cls=api:find_uobject('WidgetBlueprintGeneratedClass /Game/Interfaces/UI_ScreenFlashes.UI_ScreenFlashes_C')
     if not cls then return end
-    local s={pawn=pawn,pc=pc,items={},known={},damage_yaw=setmetatable({}, {__mode='k'}),redraw=0,dirty=true};state=s
+    local s={pawn=pawn,pc=pc,items={},known={},damage_yaw=setmetatable({}, {__mode='k'}),redraw=0,warmup=0,dirty=true};state=s
     local identity=native('CoreUObject.Transform',{Translation={X=0,Y=0,Z=0},Rotation={X=0,Y=0,Z=0,W=1},Scale3D={X=1,Y=1,Z=1}})
     s.head=assert(pawn:AddComponentByClass(find('Class /Script/Engine.SceneComponent'),true,identity,false))
     UEVR_UObjectHook.activate();local tracking=assert(UEVR_UObjectHook.get_or_add_motion_controller_state(s.head));tracking:set_hand(2);tracking:set_permanent(true)
@@ -108,9 +127,13 @@ local function build(pawn,pc)
     end
     if has(s.component,'BackgroundColor') then s.component.BackgroundColor=native('CoreUObject.LinearColor',{R=0,G=0,B=0,A=0}) end
     s.component.TickWhenOffscreen=true;s.component.bManuallyRedraw=true
+    if s.component:get_class():find_function('SetTickWhenOffscreen') then s.component:SetTickWhenOffscreen(true) end
+    s.component:SetComponentTickEnabled(true)
+    s.component:SetVisibility(true,true)
+    s.component:SetHiddenInGame(false,true)
     s.component:SetWindowFocusable(false)
     if has(s.component,'bReceiveHardwareInput') then s.component.bReceiveHardwareInput=false end
-    s.component:SetWidget(s.host);s.component:RequestRedraw()
+    s.component:SetWidget(s.host);redraw(s.component)
     s.token=string.format('%.0f',s.component:get_address());bridge('Source',s.token)
     install_damage_hooks()
 end
@@ -145,7 +168,7 @@ local function scan(s)
     for _,spec in ipairs(specs) do
         local cls=api:find_uobject(spec[1])
         if cls then for _,owner in ipairs(cls:get_objects_matching(false)) do
-            if alive(owner) and owner~=s.host and owner:IsInViewport() then
+            if owner~=s.host and attached(owner) then
                 local pc=owner:GetOwningPlayer()
                 if pc==s.pc or pc==nil then
                     if spec[3] then
@@ -179,7 +202,7 @@ local function sync(s,dt)
     end
     for i=#s.items,1,-1 do
         local item=s.items[i]
-        if not alive(item.source) or not alive(item.owner) or not item.owner:IsInViewport() then
+        if not alive(item.source) or not attached(item.owner) then
             pcall(restore_item,item);s.known[item.source]=nil;table.remove(s.items,i);s.dirty=true
         else
             local src,clone=item.source,item.clone
@@ -229,14 +252,28 @@ local function sync(s,dt)
     s.was_active=active
     bridge('Active',enabled and active and 'true' or 'false')
     s.redraw=s.redraw+dt
-    if s.dirty or (active and s.redraw>=1/60) then s.component:RequestRedraw();s.dirty=false;s.redraw=0 end
+    s.warmup=(s.warmup or 0)+dt
+    if s.dirty or (active and s.redraw>=1/60) or (enabled and not ready and s.warmup>=.25) then
+        redraw(s.component);s.dirty=false;s.redraw=0;s.warmup=0
+    end
     s.ready=ready;s.active=enabled and active; health.set('Effects',ready and 'Active' or 'Original effects (fallback)')
+    if enabled then
+        if ready then status('Active: independent full-view effects; sources='..#s.items)
+        elseif status_elapsed>=1 then
+            local target=s.component:GetRenderTarget()
+            status(not target and 'Waiting: offscreen effects render target has not been created'
+                or ('Waiting: native effects compositor acknowledgement; sources='..#s.items))
+        end
+    else
+        status('Paused: cursor='..tostring(s.pc.bShowMouseCursor)..'; VR menu='..tostring(uevr.params.functions.is_drawing_ui())..'; cinema='..tostring(vr:get_mod_value('VR_2DScreenMode')))
+    end
 end
 uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
+    status_elapsed=status_elapsed+(dt or .016)
     retry=math.max(0,retry-dt);if retry>0 then return end
     local ok,err=pcall(function()
         if not vr.is_runtime_ready() or not vr.is_hmd_active() then
-            if state then cleanup();fs.write('farfarvr-effects-status.txt','Headset inactive; original effects restored') end
+            if state then cleanup();fs.write('farfarvr-effects-status.txt','Headset inactive; last render state: '..(last_operating_status or 'not initialized')) end
             return
         end
         local backend=vr:get_mod_value('VR_FarFarEffectsReady')

@@ -30,6 +30,9 @@ function widget()
  function n:IsVisible() return self.visible end
  function n:GetVisibility() return self.visibility or 3 end
  function n:SetVisibility(v) self.visibility=v end
+ function n:SetComponentTickEnabled(v) self.tick_enabled=v end
+ function n:SetHiddenInGame(v) self.hidden_in_game=v end
+ function n:GetRenderTarget() return self.render_target or {} end
  function n:SetBrush(v) self.brush=v end
  function n:SetColorAndOpacity(v) self.tint=v end
  function n:SetRenderOpacity(v) self.opacity=v end
@@ -46,7 +49,7 @@ function setup(directional)
  local source,clone,wrapper=widget(),widget(),widget()
  source.Brush={ResourceObject={native_material=true}};source.RenderOpacity=.8
  local owner=widget();owner.WidgetTree={RootWidget=wrapper};local parent=widget();parent:AddChildToCanvas(source)
- local component={redraws=0,RequestRedraw=function(self) self.redraws=self.redraws+1 end}
+ local component=widget();component.redraws=0;component.RequestRedraw=function(self) self.redraws=self.redraws+1 end
  local pc={bShowMouseCursor=false,PlayerCameraManager={K2_GetActorRotation=function() return {Yaw=100} end}}
  local slot=widget():AddChildToCanvas(clone)
  local s={pc=pc,pawn={},head={K2_GetComponentRotation=function() return {Yaw=10} end},component=component,token='123',redraw=0,dirty=false,
