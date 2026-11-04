@@ -5,6 +5,8 @@ python (Join-Path $PSScriptRoot 'Generate-Settings.py')
 if ($LASTEXITCODE -ne 0) { throw 'Settings generation failed.' }
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $runtimeRoot = [IO.Path]::GetFullPath($RuntimeFolder)
+python (Join-Path $PSScriptRoot 'Audit-PublicFiles.py')
+if ($LASTEXITCODE -ne 0) { throw 'Public-file privacy audit failed; nothing was packaged.' }
 
 $packageRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'dist\FarFarVR'))
 if (!$packageRoot.StartsWith($projectRoot.TrimEnd('\')+'\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid package output path.' }
@@ -50,14 +52,19 @@ $profileSource = Join-Path $projectRoot 'Profile'
 $profileDest = Join-Path $packageRoot 'Profile'
 New-Item -ItemType Directory -Path $profileDest -Force | Out-Null
 
-Get-ChildItem -LiteralPath $profileSource -File -Recurse |
-    Where-Object { $_.Extension -ne '.md' } |
-    ForEach-Object {
-        $relative = $_.FullName.Substring($profileSource.Length).TrimStart('\', '/')
-        $destination = Join-Path $profileDest $relative
-        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
-        Copy-Item -LiteralPath $_.FullName -Destination $destination
-    }
+# Publish only reviewed, tracked profile inputs. Local backups, logs or private
+# machine state must never enter a release merely because they exist on disk.
+$trackedProfile = @(git -C $projectRoot ls-files -- Profile)
+if ($LASTEXITCODE -ne 0 -or !$trackedProfile.Count) { throw 'Could not enumerate tracked profile inputs.' }
+foreach ($tracked in $trackedProfile) {
+    $file = Get-Item -LiteralPath (Join-Path $projectRoot $tracked)
+    if ($file.Extension -eq '.md') { continue }
+    if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Profile publication inputs cannot be links.' }
+    $relative = $tracked.Substring('Profile/'.Length)
+    $destination = Join-Path $profileDest $relative
+    New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+    Copy-Item -LiteralPath $file.FullName -Destination $destination
+}
 
 foreach ($name in @('README.md', 'THIRD_PARTY.md', 'DISCLAIMER.txt')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $packageRoot
