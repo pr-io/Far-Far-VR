@@ -19,7 +19,7 @@ internal static class Program
         LauncherLog.Write($"Launcher opened. executable={Environment.ProcessPath}; corrected runtime={Setup.CurrentBackendHash}; arguments={string.Join(' ', args)}");
         using var instance = new Mutex(true, @"Local\FarFarWestVR.Launcher", out bool first);
         if (!first) {
-            PostMessage(FindWindow(null,"Far Far VR"),ActivateMessage,args.Contains("--start")?new IntPtr(1):IntPtr.Zero,IntPtr.Zero);
+            PostMessage(FindWindow(null,"Far Far VR"),ActivateMessage,IntPtr.Zero,IntPtr.Zero);
             LauncherLog.Write("Forwarded request to the open launcher.");return;
         }
         try { if (UpdateService.StartPendingApply(args)) return; }
@@ -43,7 +43,6 @@ internal static class Program
         }
         Setup.UsePreviewPreferences = runtimeOverride != null;
         var form=new LauncherForm(runtimeOverride);
-        if(args.Contains("--start"))form.Shown+=(_,_)=>form.RequestStart();
         Application.Run(form);
     }
 }

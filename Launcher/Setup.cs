@@ -15,7 +15,7 @@ internal sealed class Setup
     public bool CloseAfterLaunch { get; set; } = false;
     public const string ShippingRelative = @"FarFarWest\Binaries\Win64\FarFarWest-Win64-Shipping.exe";
     internal static bool UsePreviewPreferences { get; set; }
-    internal const string CurrentBackendHash = "6B4081352D2E23061F87C3086FDEE84A857682E95EAEB8A016C4C9BD7357B341";
+    internal const string CurrentBackendHash = "E784A9946B924FEDCB7A174473EA6DB784399AE40BCFBB6F2FE94E2DC10096C0";
     internal const string BaseBackendHash = "FEFF6417359F6E36ABAC6577598A86B96D485A023A850F8614043AA0A508C8CB";
     internal static readonly string[] CompatibleBackendHashes = new[]
     {

@@ -207,10 +207,10 @@ index 0bc9c55d..29970f9d 100644
          };
  
 diff --git a/src/Main.cpp b/src/Main.cpp
-index 2b3a910e..2589ab4e 100644
+index 2b3a910e..875c3d4f 100644
 --- a/src/Main.cpp
 +++ b/src/Main.cpp
-@@ -7,15 +7,46 @@
+@@ -7,15 +7,73 @@
  #include <utility/Thread.hpp>
  
  #include "Framework.hpp"
@@ -219,14 +219,41 @@ index 2b3a910e..2589ab4e 100644
  
 +namespace {
 +safetyhook::InlineHook* farfar_exit_hook{};
++struct FarFarExitWatchdog {
++    HANDLE completed{};
++    DWORD exit_status{};
++};
++DWORD WINAPI force_exit_if_stalled(void* context) {
++    const auto* state = static_cast<const FarFarExitWatchdog*>(context);
++    if (WaitForSingleObject(state->completed, 5000) != WAIT_OBJECT_0) {
++        TerminateProcess(GetCurrentProcess(), state->exit_status);
++    }
++    return 0;
++}
 +void NTAPI finish_farfar_exit(LONG status) {
 +    // Release Meta/OpenXR while its IPC worker threads are still alive. Waiting
 +    // until DLL_PROCESS_DETACH leaves Meta's hand-interaction DLL waiting on
 +    // threads Windows has already terminated under the loader lock.
++    const auto completed = CreateEventW(nullptr, TRUE, FALSE, nullptr);
++    if (!completed) {
++        TerminateProcess(GetCurrentProcess(), static_cast<DWORD>(status));
++        return;
++    }
++    FarFarExitWatchdog state{completed, static_cast<DWORD>(status)};
++    const auto watchdog = CreateThread(nullptr, 0, force_exit_if_stalled, &state, 0, nullptr);
++    if (!watchdog) {
++        CloseHandle(completed);
++        TerminateProcess(GetCurrentProcess(), static_cast<DWORD>(status));
++        return;
++    }
 +    if(const auto vr=VR::get()) {
 +        vr->stop_native_openxr_async_wait_worker();
 +        if(const auto xr=vr->get_openxr_runtime())xr->destroy();
 +    }
++    SetEvent(completed);
++    WaitForSingleObject(watchdog, INFINITE);
++    CloseHandle(watchdog);
++    CloseHandle(completed);
 +    farfar_exit_hook->call<void>(status);
 +}
 +}
@@ -257,8 +284,9 @@ index 2b3a910e..2589ab4e 100644
 +        if(_wcsicmp(name?name+1:executable,L"FarFarWest-Win64-Shipping.exe")==0)g_framework.release();
 +    }
      return TRUE;
- }
+-}
 \ No newline at end of file
++}
 diff --git a/src/mods/LuaLoader.cpp b/src/mods/LuaLoader.cpp
 index 7da9003b..bac1b1e5 100644
 --- a/src/mods/LuaLoader.cpp
@@ -1824,7 +1852,7 @@ index 29195fb0..0fa69d3a 100644
      } else if (data.auto_enabled_decoupled_pitch) {
          data.auto_enabled_decoupled_pitch = false;
 diff --git a/src/mods/vr/OverlayComponent.cpp b/src/mods/vr/OverlayComponent.cpp
-index fb098d5e..e76466f6 100644
+index fb098d5e..94c4ea5c 100644
 --- a/src/mods/vr/OverlayComponent.cpp
 +++ b/src/mods/vr/OverlayComponent.cpp
 @@ -2,6 +2,8 @@
@@ -1955,7 +1983,7 @@ index fb098d5e..e76466f6 100644
          m_parent->m_framework_intersect_state.intersecting = false;
          return std::nullopt;
      }
-@@ -1180,11 +1240,38 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
+@@ -1180,11 +1240,39 @@ std::optional<std::reference_wrapper<XrCompositionLayerQuad>> OverlayComponent::
          layer.space = vr->m_openxr->stage_space;
      }
  
@@ -1965,7 +1993,8 @@ index fb098d5e..e76466f6 100644
 +    }();
 +    if (farfar && g_framework->is_drawing_ui()) {
 +        if (!m_farfar_framework_active) {
-+            m_farfar_framework_pose=Matrix4x4f{glm::normalize(glm::quat{vr->get_rotation(0,false)})};
++            // Keep the settings panel upright while preserving the heading it opened toward.
++            m_farfar_framework_pose=Matrix4x4f{utility::math::flatten(glm::quat{vr->get_rotation(0,false)})};
 +            m_farfar_framework_pose[3]=vr->get_position(0,false);
 +            m_farfar_framework_active=true;
 +        }
