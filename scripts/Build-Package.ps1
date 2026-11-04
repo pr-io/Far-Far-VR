@@ -63,7 +63,9 @@ foreach ($name in @('README.md', 'THIRD_PARTY.md', 'DISCLAIMER.txt')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $packageRoot
 }
 New-Item -ItemType Directory -Path (Join-Path $packageRoot 'docs') -Force | Out-Null
-Get-ChildItem -LiteralPath (Join-Path $projectRoot 'docs') -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $packageRoot 'docs') }
+foreach ($name in @('farfarvr-controls.jpg', 'farfarvr-launcher.png', "RELEASE-$version.md")) {
+    Copy-Item -LiteralPath (Join-Path $projectRoot "docs\$name") -Destination (Join-Path $packageRoot 'docs')
+}
 Copy-Item -LiteralPath (Join-Path $projectRoot 'Launcher\Apply-Update.ps1') -Destination (Join-Path $packageRoot 'Apply-Update.ps1')
 Copy-Item -LiteralPath (Join-Path $packageRoot 'Far Far VR.exe') -Destination (Join-Path $projectRoot 'Far Far VR.exe') -Force
 Set-Content -LiteralPath (Join-Path $packageRoot 'version.txt') -Value $version -Encoding ascii
