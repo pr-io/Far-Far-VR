@@ -10,7 +10,7 @@ Use Windows x64 and the .NET 8 SDK:
 dotnet publish Launcher\FarFarWestVR.csproj -c Release -r win-x64 -o Launcher\publish
 ```
 
-The launcher includes its .NET runtime. The release builder also needs the pinned customization delta in the ignored local `Runtime` folder. Obtain the matching [0.4.12 delta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.12/backend.ffvrdelta); its hash is checked by the builder and installer.
+The launcher includes its .NET runtime. The release builder also needs the pinned customization delta in the ignored local `Runtime` folder. Obtain the matching [0.4.13 delta](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.13/backend.ffvrdelta); its hash is checked by the builder and installer.
 
 Publisher privacy preparation sanitizes the pinned native candidate before generating its delta. Preserve the original candidate and use a separate output file:
 
@@ -25,7 +25,7 @@ The sanitizer accepts only its explicitly pinned input, preserves all executable
 pwsh -File scripts\Build-Package.ps1
 ```
 
-Output: `dist/FarFarVR-v0.4.12.zip`. It includes the launcher, player profile, delta, updater helper, documentation, images and SHA-256 manifest. Tests, source checkouts, development reports and complete upstream runtime DLLs are excluded.
+Output: `dist/FarFarVR-v0.4.13.zip`. It includes the launcher, player profile, delta, updater helper, documentation, images and SHA-256 manifest. Tests, source checkouts, development reports and complete upstream runtime DLLs are excluded.
 
 ## Regression checks
 
