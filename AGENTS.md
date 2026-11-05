@@ -1,5 +1,7 @@
 # Preserve the cumulative mod
 
+Read `docs/ACCEPTED-BASELINE.md` before changing gameplay, rendering, runtime packaging or configuration. The user accepted v0.4.16 as the early-access baseline on November 4, 2026. Earlier unresolved crosshair/effects reports are superseded by that acceptance; do not reopen them without new evidence.
+
 This project contains interdependent VR features developed across multiple chats. Preserve the complete current feature set in `docs/FEATURE-INVENTORY.md` when making a scoped change.
 
 - Start from the current cumulative source. Do not replace the installation, native engine or gameplay modules with an older release to fix a narrow defect.
