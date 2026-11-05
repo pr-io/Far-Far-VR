@@ -8,10 +8,6 @@ local possessed_pawn
 local scan_time=0
 local retry_time,stage=0,'startup'
 local recover_hud
-local last_status
-local function status(message)
-    if message~=last_status then last_status=message; pcall(fs.write,'farfarvr-hud-status.txt',message) end
-end
 local obj_cache = {}
 local function find(path)
     local obj = obj_cache[path]
@@ -178,7 +174,6 @@ local function update(s,pc,dt)
     show_marker(s,visible);bridge('Active',visible and 'true' or 'false')
     if not visible then
         show_marker(s,false)
-        status('Paused: cursor='..tostring(pc.bShowMouseCursor)..'; VR menu='..tostring(uevr.params.functions.is_drawing_ui())..'; cinema='..tostring(vr:get_mod_value('VR_2DScreenMode')))
     end
     if s.dirty or (visible and s.animation_time>=1/60) then
         sync_images(s);s.component:RequestRedraw();s.animation_time=0;s.dirty=false
@@ -245,9 +240,7 @@ local function render_aim(s)
     local up=-dx*(cr*sp*cy+sr*sy)+dy*(cy*sr-cr*sp*sy)+dz*cr*cp
     local units=100*math.max(.1,tonumber(vr:get_mod_value('VR_WorldScale')) or 1)
     bridge('Target',string.format('%.8f %.8f %.8f',right/units,up/units,-forward/units))
-    s.aim_updates=(s.aim_updates or 0)+1
     health.set('HUD',s.ready and 'Active' or 'Waiting for independent layer')
-    status(s.ready and ('Active: independent crosshair from '..s.aim_source) or 'Waiting: independent crosshair compositor handoff')
 
 end
 pcall(bridge,'Source','0');pcall(bridge,'Active','false');pcall(clear_aim)
@@ -304,8 +297,7 @@ uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
                 for _,hud in ipairs(candidates) do
                     if local_hud(hud,pc) then stage='private gun layer build';build(pawn,pc,hud);break end
                 end
-                if not state then status(#candidates==0 and 'Waiting: no gameplay HUD instances discovered' or 'Waiting: gameplay HUD is not attached to the local player view') end
-            else status('Waiting: gameplay HUD class is not loaded') end
+            end
         end
         stage='private gun artwork';if state then update(state,pc,dt) end
 

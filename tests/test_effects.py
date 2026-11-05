@@ -254,6 +254,6 @@ class EffectsTests(unittest.TestCase):
   uevr.api.get_player_controller=function() error('Idle must not query/build a gameplay renderer') end
   tick(nil,.02)
   assert(values.VR_FarFarEffectsSource=='0' and values.VR_FarFarEffectsActive=='false')
-  assert(s.items[1].wrapper.visibility==4 and files['farfarvr-effects-status.txt']:find('inactive',1,true))
+  assert(s.items[1].wrapper.visibility==4 and capture(tick,'state')==nil)
   """)
 if __name__=='__main__':unittest.main()

@@ -7,13 +7,6 @@ local api,vr=uevr.api,uevr.params.vr
 local health=require('farfarvr_health')
 local state,retry,scan_elapsed=nil,0,0
 local obj_cache = {}
-local last_status,last_operating_status,status_elapsed=nil,nil,1
-local function status(message)
-    last_operating_status=message
-    if message~=last_status and status_elapsed>=1 then
-        last_status=message;status_elapsed=0;pcall(fs.write,'farfarvr-effects-status.txt',message)
-    end
-end
 local function find(path)
     local object = obj_cache[path]
     if not object then
@@ -257,23 +250,12 @@ local function sync(s,dt)
         redraw(s.component);s.dirty=false;s.redraw=0;s.warmup=0
     end
     s.ready=ready;s.active=enabled and active; health.set('Effects',ready and 'Active' or 'Original effects (fallback)')
-    if enabled then
-        if ready then status('Active: independent full-view effects; sources='..#s.items)
-        elseif status_elapsed>=1 then
-            local target=s.component:GetRenderTarget()
-            status(not target and 'Waiting: offscreen effects render target has not been created'
-                or ('Waiting: native effects compositor acknowledgement; sources='..#s.items))
-        end
-    else
-        status('Paused: cursor='..tostring(s.pc.bShowMouseCursor)..'; VR menu='..tostring(uevr.params.functions.is_drawing_ui())..'; cinema='..tostring(vr:get_mod_value('VR_2DScreenMode')))
-    end
 end
 uevr.sdk.callbacks.on_post_engine_tick(function(_,dt)
-    status_elapsed=status_elapsed+(dt or .016)
     retry=math.max(0,retry-dt);if retry>0 then return end
     local ok,err=pcall(function()
         if not vr.is_runtime_ready() or not vr.is_hmd_active() then
-            if state then cleanup();fs.write('farfarvr-effects-status.txt','Headset inactive; last render state: '..(last_operating_status or 'not initialized')) end
+            if state then cleanup() end
             return
         end
         local backend=vr:get_mod_value('VR_FarFarEffectsReady')
