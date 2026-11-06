@@ -11,5 +11,6 @@
     <Compile Include="../../Launcher/Setup.cs" Link="Setup.cs" />
     <Compile Include="../../Launcher/RuntimePatch.cs" Link="RuntimePatch.cs" />
     <None Include="../../Profile/config.txt" Link="ProfileDefaults.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../version.txt" Link="ReleaseVersion.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
