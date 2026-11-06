@@ -75,13 +75,74 @@ try
     Check(await privateService.CheckAsync() is null);
     Check(privateHandler.Authorization == "Bearer test-token");
 
+    service.WriteStatus("up-to-date", "v0.4.2", "Before setup");
+    Check(!Directory.Exists(statusRoot));
+    Directory.CreateDirectory(statusRoot);
+    service.WriteStatus("up-to-date", "v0.4.2", "Empty profile");
+    Check(!Directory.Exists(Path.Combine(statusRoot, "data")));
+    File.WriteAllText(Path.Combine(statusRoot, "config.txt"), "player settings");
     service.WriteStatus("available", "v0.4.2", "Notes\nwith details");
     string status = File.ReadAllText(UpdateService.StatusPath(statusRoot));
     Check(System.Text.RegularExpressions.Regex.Replace(status,"responseId=[^\n]*\n", "") == "state=available\nversion=v0.4.2\nnotes:\nNotes\nwith details");
+    Check(File.ReadAllText(Path.Combine(statusRoot, "config.txt")) == "player settings");
 }
 finally
 {
     if (Directory.Exists(statusRoot)) Directory.Delete(statusRoot, recursive: true);
+}
+
+// First-use installation and recovery use disposable profiles, never AppData.
+var firstUseRoot = Path.Combine(Path.GetTempPath(), "farfarvr-first-use-" + Guid.NewGuid().ToString("N"));
+try
+{
+    string bundled = Path.Combine(firstUseRoot, "bundled");
+    Directory.CreateDirectory(Path.Combine(bundled, "scripts"));
+    File.WriteAllText(Path.Combine(bundled, "config.txt"), "bundled config");
+    File.WriteAllText(Path.Combine(bundled, "scripts", "module.lua"), "bundled module");
+    foreach (string scenario in new[] { "missing", "empty", "empty-data", "legacy", "pending-only" })
+    {
+        string profile = Path.Combine(firstUseRoot, scenario);
+        var service = new UpdateService(profile);
+        if (scenario != "missing") Directory.CreateDirectory(profile);
+        if (scenario is "empty-data" or "legacy" or "pending-only") Directory.CreateDirectory(Path.Combine(profile, "data"));
+        if (scenario == "legacy") File.WriteAllText(UpdateService.StatusPath(profile), "old status");
+        if (scenario is "legacy" or "pending-only") File.WriteAllText(UpdateService.StatusPath(profile) + ".pending", "pending status");
+        service.WriteStatus("checking", "v0.4.18", "Before installation");
+        Setup.InstallBundledProfile(profile, bundled);
+        Check(File.ReadAllText(Path.Combine(profile, "config.txt")) == "bundled config");
+        Check(File.ReadAllText(Path.Combine(profile, "scripts", "module.lua")) == "bundled module");
+        if (scenario == "legacy") Check(File.ReadAllText(UpdateService.StatusPath(profile)) == "old status");
+        if (scenario is "legacy" or "pending-only") Check(File.ReadAllText(UpdateService.StatusPath(profile) + ".pending") == "pending status");
+        service.WriteStatus("up-to-date", "v0.4.18", "After installation");
+        Check(File.ReadAllText(UpdateService.StatusPath(profile)).StartsWith("state=up-to-date\n"));
+    }
+    foreach (string relative in new[] { "config.txt", "user.txt", "data/user.txt", "scripts/custom.lua", "data/farfarvr-update-command.txt" })
+    {
+        string profile = Path.Combine(firstUseRoot, "unknown-" + Guid.NewGuid().ToString("N"));
+        string playerFile = Path.Combine(profile, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(playerFile)!);
+        File.WriteAllText(playerFile, "preserve me");
+        bool rejected = false;
+        try { Setup.InstallBundledProfile(profile, bundled); } catch (IOException) { rejected = true; }
+        Check(rejected);
+        Check(File.ReadAllText(playerFile) == "preserve me");
+        Check(Directory.GetFiles(profile, "*", SearchOption.AllDirectories).Length == 1);
+    }
+    // A failed metadata merge restores the original directory intact.
+    string rollback = Path.Combine(firstUseRoot, "rollback");
+    Directory.CreateDirectory(Path.Combine(rollback, "data"));
+    File.WriteAllText(UpdateService.StatusPath(rollback), "original status");
+    Directory.CreateDirectory(Path.Combine(bundled, "data"));
+    File.WriteAllText(UpdateService.StatusPath(bundled), "conflicting bundled status");
+    bool mergeRejected = false;
+    try { Setup.InstallBundledProfile(rollback, bundled); } catch (IOException) { mergeRejected = true; }
+    Check(mergeRejected);
+    Check(File.ReadAllText(UpdateService.StatusPath(rollback)) == "original status");
+    Check(!File.Exists(Path.Combine(rollback, "config.txt")));
+}
+finally
+{
+    if (Directory.Exists(firstUseRoot)) Directory.Delete(firstUseRoot, recursive: true);
 }
 
 var tempRuntime = Path.Combine(Path.GetTempPath(), "farfarvr-runtime-test-" + Guid.NewGuid().ToString("N"));

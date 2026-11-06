@@ -189,6 +189,9 @@ internal sealed class UpdateService
 
     internal void WriteStatus(string state, string version, string notes)
     {
+        // The headset bridge is only needed after profile installation. A desktop
+        // update check must not create a partial profile before first launch.
+        if (!File.Exists(Path.Combine(profile, "config.txt"))) return;
         Directory.CreateDirectory(Path.GetDirectoryName(StatusPath(profile))!);
         string path = StatusPath(profile);
         string temporary = path + ".pending";

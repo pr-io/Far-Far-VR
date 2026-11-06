@@ -262,11 +262,17 @@ internal sealed class Setup
     {
         // Preserve player settings while applying explicit versioned integration repairs.
         if (File.Exists(Path.Combine(ProfileFolder, "config.txt"))) { EnsureMenuModule(); RecoverComfortOverrides(); return; }
-        if (Directory.Exists(ProfileFolder) && Directory.EnumerateFileSystemEntries(ProfileFolder).Any())
+        InstallBundledProfile(ProfileFolder, Path.Combine(AppContext.BaseDirectory, "Profile"));
+    }
+
+    // Also recover the status-only folders created by older launchers. Never
+    // mistake an unknown/incomplete player profile for a fresh installation.
+    internal static void InstallBundledProfile(string profile, string bundled)
+    {
+        if (Directory.Exists(profile) && !IsUpdaterOnlyProfile(profile))
             throw new IOException("An incomplete VR profile exists. Back it up and resolve it before starting; it was left unchanged.");
-        string bundled = Path.Combine(AppContext.BaseDirectory, "Profile");
         if (!File.Exists(Path.Combine(bundled, "config.txt"))) throw new IOException("Bundled profile is missing. Use a complete Far Far VR package.");
-        string staging = ProfileFolder + ".install-" + Guid.NewGuid().ToString("N");
+        string staging = profile + ".install-" + Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(staging);
         foreach (string file in Directory.EnumerateFiles(bundled, "*", SearchOption.AllDirectories))
         {
@@ -274,9 +280,50 @@ internal sealed class Setup
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target);
         }
-        if (Directory.Exists(ProfileFolder)) Directory.Delete(ProfileFolder); // Empty directory only; races fail safely.
-        Directory.Move(staging, ProfileFolder);
+        string? backup = null;
+        try
+        {
+            if (Directory.Exists(profile))
+            {
+                backup = profile + ".before-first-install-" + Guid.NewGuid().ToString("N");
+                Directory.Move(profile, backup);
+                // Recheck after taking ownership, so an intervening user file is
+                // preserved and rejected rather than silently replaced.
+                if (!IsUpdaterOnlyProfile(backup))
+                    throw new IOException("The VR profile changed during setup; it was preserved. Try starting again.");
+                foreach (string file in Directory.EnumerateFiles(backup, "*", SearchOption.AllDirectories))
+                {
+                    string target = Path.Combine(staging, Path.GetRelativePath(backup, file));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.Copy(file, target); // Never overwrite bundled content.
+                }
+            }
+            Directory.Move(staging, profile);
+        }
+        catch
+        {
+            if (backup is not null && !Directory.Exists(profile)) Directory.Move(backup, profile);
+            throw;
+        }
         LauncherLog.Write("Installed bundled profile for first use.");
+    }
+
+    private static bool IsUpdaterOnlyProfile(string profile)
+    {
+        if ((File.GetAttributes(profile) & FileAttributes.ReparsePoint) != 0) return false;
+        foreach (string entry in Directory.EnumerateFileSystemEntries(profile))
+        {
+            if (!string.Equals(Path.GetFileName(entry), "data", StringComparison.OrdinalIgnoreCase) ||
+                !Directory.Exists(entry) || (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) return false;
+            foreach (string file in Directory.EnumerateFileSystemEntries(entry))
+            {
+                string name = Path.GetFileName(file);
+                if ((File.GetAttributes(file) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0 ||
+                    !(name.Equals("farfarvr-updates.txt", StringComparison.OrdinalIgnoreCase) ||
+                      name.Equals("farfarvr-updates.txt.pending", StringComparison.OrdinalIgnoreCase))) return false;
+            }
+        }
+        return true;
     }
 
     private static void EnsureMenuModule()

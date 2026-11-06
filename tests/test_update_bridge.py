@@ -8,6 +8,7 @@ class UpdateBridgeTests(unittest.TestCase):
  def test_real_lua_request_and_launcher_response_share_data_folder(self):
   with tempfile.TemporaryDirectory(prefix='ffvr-bridge-') as folder:
    profile=Path(folder);data=profile/'data';data.mkdir()
+   (profile/'config.txt').write_text('installed profile fixture')
    lua=LuaRuntime();lua.execute('package.path='+repr(str(ROOT/'Profile/scripts/?.lua').replace('\\','/'))+" .. ';' .. package.path")
    lua.execute(HARNESS)
    for field in json.loads((ROOT/'Profile/VRSettings.json').read_text()):lua.globals()["values"][field['key']]=str(field['default']).lower()
