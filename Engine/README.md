@@ -16,7 +16,9 @@ The player launcher downloads the pinned upstream archive and applies the packag
 | --- | --- |
 | Upstream ZIP | `FDF325C62BA43BC1DA98ED5F453633FA106CAEF0DF9CB8121566F7AA138F6D55` |
 | Upstream backend | `FEFF6417359F6E36ABAC6577598A86B96D485A023A850F8614043AA0A508C8CB` |
-| Far Far VR delta | `6A4E0FF8FC42E94B0FD5F8C1FBC3C41FFDA846C5B621F3318C89AD65FC41C43D` |
-| Installed backend | `1B6AC545B746190F4502C346897A36A3002C4BB61FD994521C70579F21B47A74` |
+| Far Far VR delta | `BACC64D331D034C58D7243A7E5584464431BDC5F3313F9F250395E1145BC6100` |
+| Installed backend | `74A1AF0EAB3215DEF7CC08D6C492E75A7DFE4FA2E41EBAA276818D3C9E8D0493` |
 
 See [BUILD.md](../BUILD.md) for reproduction and regression checks, and [THIRD_PARTY.md](../THIRD_PARTY.md) for attribution and upstream terms.
+
+The v0.4.18 backend is the exact native binary used in the tested local candidate. The player reported significantly better performance after testing. The earlier cumulative acceptance and preservation requirements remain recorded in `docs/ACCEPTED-BASELINE.md`. See `docs/RELEASE-0.4.18.md` for the repair and validation scope.

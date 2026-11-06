@@ -9,8 +9,8 @@ namespace FarFarWestVR;
 internal static class RuntimePatch
 {
     internal const string PatchFile = "backend.ffvrdelta";
-    internal const string PatchHash = "6A4E0FF8FC42E94B0FD5F8C1FBC3C41FFDA846C5B621F3318C89AD65FC41C43D";
-    internal const int TargetSize = 15811072;
+    internal const string PatchHash = "BACC64D331D034C58D7243A7E5584464431BDC5F3313F9F250395E1145BC6100";
+    internal const int TargetSize = 15816192;
     private static readonly Dictionary<string, string> Required = new(StringComparer.OrdinalIgnoreCase)
     {
         ["UEVRBackend.dll"] = Setup.CurrentBackendHash,

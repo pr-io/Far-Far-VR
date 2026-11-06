@@ -2,7 +2,7 @@
 
 A community **PCVR mod for Far Far West on Steam**, created by [PR_VR](https://www.youtube.com/@PR_VR). Powered by [UEVR](https://github.com/praydog/UEVR), created by praydog.
 
-**[Download Far Far VR 0.4.17](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.17/FarFarVR-v0.4.17.zip)** · [Release notes](https://github.com/pr-io/Far-Far-VR/releases/latest) · [VR Buddies Discord](https://discord.gg/PcsYNa6MS9)
+**[Download Far Far VR 0.4.18](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.18/FarFarVR-v0.4.18.zip)** · [Release notes](https://github.com/pr-io/Far-Far-VR/releases/latest) · [VR Buddies Discord](https://discord.gg/PcsYNa6MS9)
 
 Download the release ZIP above. GitHub's **Code Download ZIP** contains source code, not the playable mod.
 
@@ -16,7 +16,7 @@ Download the release ZIP above. GitHub's **Code Download ZIP** contains source c
 
 This runs the Windows game in PCVR; it is not a standalone Quest app. Performance depends on your PC, headset resolution and game settings. The mod is early access, and game updates may affect compatibility.
 
-See [what changed in v0.4.17](docs/RELEASE-0.4.17.md), including the separate crosshair layer and effects texture initialization repair.
+See [what changed in v0.4.18](docs/RELEASE-0.4.18.md), including the stereo upscaler ownership repair, bounded blank-effects redraws and optional diagnostic controls.
 
 ## Install and play
 
@@ -72,7 +72,7 @@ You can also get the complete package from [Releases](https://github.com/pr-io/F
 
 Far Far VR by [PR_VR](https://www.youtube.com/@PR_VR). UEVR by [praydog](https://github.com/praydog/UEVR); upstream compatibility patch by [joeyhodge](https://github.com/joeyhodge/UEVR). Thanks to the [Flat2VR](https://flat2vr.com/) community.
 
-First setup downloads the public [102626_FFR_SWGR_Patch release](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch) directly from upstream and applies the bundled [Far Far VR customization patch](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.17/backend.ffvrdelta). The launcher verifies the exact resulting engine. Complete upstream runtime DLLs are not bundled in the mod ZIP.
+First setup downloads the public [102626_FFR_SWGR_Patch release](https://github.com/joeyhodge/UEVR/releases/tag/102626_FFR_SWGR_Patch) directly from upstream and applies the bundled [Far Far VR customization patch](https://github.com/pr-io/Far-Far-VR/releases/download/v0.4.18/backend.ffvrdelta). The launcher verifies the exact resulting engine. Complete upstream runtime DLLs are not bundled in the mod ZIP.
 
 Far Far VR is unofficial and is not endorsed by the game developers, Epic Games or the upstream authors. Upstream retains its rights. See [third-party notices](THIRD_PARTY.md) for source links, hashes and licensing information.
 

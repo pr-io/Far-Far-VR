@@ -4,7 +4,7 @@
 local startup_ok, startup_error = pcall(function()
 local vr = uevr.params.vr
 local fields = require('farfarvr_settings')
-local groups = {'Welcome', 'Comfort', 'Calibration', 'Input', 'HUD', 'Display', 'Updates'}
+local groups = {'Welcome', 'Comfort', 'Calibration', 'Input', 'HUD', 'Display', 'Diagnostics', 'Updates'}
 local labels={HUD='Interface', Input='Controls'}
 local page, baseline, was_open, failed = 'Welcome', nil, false, nil
 -- Show the controls diagram only when requested from the Controls tab.
@@ -31,7 +31,8 @@ local function read(field)
     if finite(value) then return value end
     assert(false, 'Unavailable setting: '..field.label)
 end
-local function write(field, value, restore)
+local write
+write=function(field, value, restore)
     if field.kind=='bool' then assert(type(value)=='boolean', 'Invalid toggle value')
     else
         assert(finite(value), 'Invalid numeric value')
@@ -41,6 +42,11 @@ local function write(field, value, restore)
             assert(value>=min and value<=max, 'Setting is outside its supported range')
         end
         if field.kind=='int' or field.kind=='choice' then value=math.floor(value+.5) end
+    end
+    -- Frame trace emits Information messages. Apply the log level first so a
+    -- rejected logging change cannot leave a silently ineffective trace enabled.
+    if field.key=='OpenXR_DebugFrameTrace' and value==true and read(by_key.FrameworkConfig_LogLevel)>2 then
+        write(by_key.FrameworkConfig_LogLevel,2)
     end
     local prefs=preferences()
     if prefs and prefs.handles(field.key) then prefs.set(field.key,tostring(value))
@@ -189,6 +195,16 @@ local function draw()
         elseif page=='Display' then
             text('Adjust VR resolution scale and spectator mirror.')
             text('Game quality, antialiasing and headset refresh rate stay in their own settings.')
+            imgui.spacing()
+        elseif page=='Diagnostics' then
+            text('Diagnostic files stay on this PC. Recording can affect performance.')
+            text('Enable only while troubleshooting, then turn it off again.')
+            if imgui.button('Turn off diagnostics',{230,36}) then
+                write(by_key.OpenXR_DebugFrameTrace,false)
+                write(by_key.VR_EnableHitchDiagnostics,false)
+                write(by_key.FrameworkConfig_LogLevel,3)
+                status='Diagnostics off. Normal warnings and errors restored.'
+            end
             imgui.spacing()
         elseif page=='Updates' then
             poll_update_status()

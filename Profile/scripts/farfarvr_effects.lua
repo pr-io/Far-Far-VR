@@ -246,8 +246,15 @@ local function sync(s,dt)
     bridge('Active',enabled and active and 'true' or 'false')
     s.redraw=s.redraw+dt
     s.warmup=(s.warmup or 0)+dt
-    if s.dirty or (active and s.redraw>=1/60) or (enabled and not ready and s.warmup>=.25) then
+    -- Resource initialization may need a few wakeups, but an unavailable native
+    -- acknowledgement must not redraw a blank 1024x1024 target forever.
+    -- Live artwork still redraws normally and can recover after this budget.
+    if ready or not enabled then s.warmup_attempts=0;s.warmup=0 end
+    local retry_warmup=enabled and not ready and not active
+        and (s.warmup_attempts or 0)<8 and s.warmup>=.25
+    if s.dirty or (active and s.redraw>=1/60) or retry_warmup then
         redraw(s.component);s.dirty=false;s.redraw=0;s.warmup=0
+        if retry_warmup then s.warmup_attempts=(s.warmup_attempts or 0)+1 end
     end
     s.ready=ready;s.active=enabled and active; health.set('Effects',ready and 'Active' or 'Original effects (fallback)')
 end

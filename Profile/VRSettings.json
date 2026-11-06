@@ -251,5 +251,38 @@
     "kind": "bool",
     "default": false,
     "description": "Allows exceeding default engine framerate caps. Leave disabled to prevent frame pacing stalls."
+  },
+  {
+    "group": "Diagnostics",
+    "key": "VR_EnableHitchDiagnostics",
+    "label": "Performance timing",
+    "kind": "bool",
+    "default": false,
+    "description": "Records frame timing and hitch snapshots locally. Turn off after troubleshooting."
+  },
+  {
+    "group": "Diagnostics",
+    "key": "OpenXR_DebugFrameTrace",
+    "label": "Detailed frame trace",
+    "kind": "bool",
+    "default": false,
+    "description": "Records each VR frame step. Enables Information logging and can reduce performance; use briefly."
+  },
+  {
+    "group": "Diagnostics",
+    "key": "FrameworkConfig_LogLevel",
+    "label": "Log detail",
+    "kind": "choice",
+    "default": 3,
+    "choices": [
+      "Trace (most detailed)",
+      "Debug",
+      "Information",
+      "Warnings and errors",
+      "Errors only",
+      "Critical only",
+      "Off"
+    ],
+    "description": "Controls the local runtime log. Warnings and errors is the normal setting."
   }
 ]

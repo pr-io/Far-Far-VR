@@ -37,3 +37,14 @@ The launcher must verify the actual requested DLL after loading it, whether Open
 - User forbids local test suites and game/headset launches unless explicitly requested later. Builds and static inspection are permitted, but must not be presented as wearer validation. Existing GitHub automation remains enabled.
 - Deliver requested fixes through complete published releases when publication is requested; a local edit or source push alone is not a downloadable update.
 - Do not create another release merely to record these notes.
+
+## Accepted performance update: v0.4.18
+
+On November 6, 2026, the player tested the complete local candidate and reported significantly better performance, then authorized a new release. v0.4.18 promotes that candidate without changing its native backend or gameplay behavior. This supplements the cumulative v0.4.16 acceptance above.
+
+- Backend SHA-256: `74A1AF0EAB3215DEF7CC08D6C492E75A7DFE4FA2E41EBAA276818D3C9E8D0493`.
+- Runtime delta SHA-256: `BACC64D331D034C58D7243A7E5584464431BDC5F3313F9F250395E1145BC6100`.
+- Reconstructed native size: 15,816,192 bytes.
+- Retain the exact-game native secondary-family ownership repair and bounded empty-effects warmup retries alongside all prior rendering, controls and settings behavior.
+- Diagnostics are optional and disabled by default. Performance timing, detailed frame trace and log detail can be changed in the Far Far VR menu; the off button disables capture and restores normal warnings/errors. Do not enable diagnostics automatically.
+- Player-reported improvement is not a guarantee of a particular frame rate or universal resolution of every long-session/audio issue.

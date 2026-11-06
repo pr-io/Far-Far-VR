@@ -101,8 +101,16 @@ class EffectsTests(unittest.TestCase):
  def test_no_continuous_blank_redraw_when_native_ack_unavailable(self):
   self.check('''
   local s=setup(false);s.items[1].source.RenderOpacity=0;s.dirty=true
-  for i=1,120 do sync(s,1/120) end
-  assert(s.component.redraws==1 and not s.ready and s.items[1].wrapper.visibility==4)
+  for i=1,2400 do sync(s,1/120) end
+  assert(s.component.redraws==9 and not s.ready and s.items[1].wrapper.visibility==4)
+  local count=s.component.redraws
+  for i=1,2400 do sync(s,1/120) end
+  assert(s.component.redraws==count)
+  -- Visible artwork still wakes the target after blank warmup is exhausted.
+  s.items[1].source.RenderOpacity=.8;sync(s,.02)
+  assert(s.active and s.component.redraws==count+1)
+  values.VR_FarFarEffectsReady='123';sync(s,.02)
+  assert(s.ready and s.items[1].wrapper.visibility==2)
   ''')
  def test_originals_visible_until_native_ack_and_live_material_timing_preserved(self):
   self.check('''

@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 6aaf05d0..4bc75661 100644
+index 6aaf05d0..e0c429f7 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1582,6 +1582,18 @@ list(APPEND uevr_SOURCES
+@@ -1582,6 +1582,19 @@ list(APPEND uevr_SOURCES
  	"src/mods/vr/DuneSmartGI.hpp"
  	"src/mods/vr/DuneSmartGIContract.hpp"
  	"src/mods/vr/FFakeStereoRenderingHook.hpp"
@@ -10,6 +10,7 @@ index 6aaf05d0..4bc75661 100644
 +	"src/mods/vr/FarFarWestConsole.hpp"
 +	"src/mods/vr/FarFarWestControls.hpp"
 +	"src/mods/vr/FarFarWestEffects.hpp"
++	"src/mods/vr/FarFarWestFamily.hpp"
 +	"src/mods/vr/FarFarWestGunLayer.hpp"
 +	"src/mods/vr/FarFarWestMemoryProbe.hpp"
 +	"src/mods/vr/FarFarWestMenu.hpp"
@@ -282,6 +283,65 @@ index 2b3a910e..875c3d4f 100644
 -}
 \ No newline at end of file
 +}
+diff --git a/src/mods/FrameworkConfig.cpp b/src/mods/FrameworkConfig.cpp
+index 0493d6ac..7c1301f3 100644
+--- a/src/mods/FrameworkConfig.cpp
++++ b/src/mods/FrameworkConfig.cpp
+@@ -11,6 +11,42 @@ std::optional<std::string> FrameworkConfig::on_initialize() {
+     return Mod::on_initialize();
+ }
+ 
++
++namespace {
++// Lua's focused menu uses the same persisted option as the native settings UI.
++// Apply its logging change at the setter, without polling or a gameplay callback.
++class LiveFrameworkLogLevel final : public IModValue {
++public:
++    explicit LiveFrameworkLogLevel(IModValue* option) : m_option(option) {}
++    bool draw(std::string_view) override { return false; }
++    void draw_value(std::string_view) override {}
++    void config_load(const utility::Config&, bool) override {}
++    void config_save(utility::Config&) override {}
++    std::string get_config_name() const override { return m_option->get_config_name(); }
++    std::string_view get_config_name_view() const override { return m_option->get_config_name_view(); }
++    std::string get() const override { return m_option->get(); }
++    void set(const std::string& text) override {
++        size_t used{};
++        int level{};
++        try { level=std::stoi(text,&used); } catch (...) { return; }
++        if (used!=text.size() || level<0 || level>=spdlog::level::n_levels) { return; }
++        m_option->set(text);
++        spdlog::set_level(static_cast<spdlog::level::level_enum>(level));
++    }
++private:
++    IModValue* m_option;
++};
++}
++
++IModValue* FrameworkConfig::get_value(std::string_view name) const {
++    auto* option=Mod::get_value(name);
++    if (name=="FrameworkConfig_LogLevel" && option) {
++        static LiveFrameworkLogLevel live{option};
++        return &live;
++    }
++    return option;
++}
++
+ void FrameworkConfig::draw_main() {
+     m_menu_key->draw("Menu Key");
+     m_show_cursor_key->draw("Show Cursor Key");
+diff --git a/src/mods/FrameworkConfig.hpp b/src/mods/FrameworkConfig.hpp
+index ccfe5d8d..842b6eae 100644
+--- a/src/mods/FrameworkConfig.hpp
++++ b/src/mods/FrameworkConfig.hpp
+@@ -7,6 +7,7 @@
+ class FrameworkConfig : public Mod {
+ public:
+     static std::shared_ptr<FrameworkConfig>& get();
++    IModValue* get_value(std::string_view name) const override;
+ 
+ public:
+     FrameworkConfig() {
 diff --git a/src/mods/LuaLoader.cpp b/src/mods/LuaLoader.cpp
 index 7da9003b..bac1b1e5 100644
 --- a/src/mods/LuaLoader.cpp
@@ -345,7 +405,7 @@ index 548d33d5..2630273d 100644
  
      void on_config_load(const utility::Config& cfg, bool set_defaults) override;
 diff --git a/src/mods/VR.cpp b/src/mods/VR.cpp
-index e0f0eb58..c6d16fec 100644
+index e0f0eb58..8704335f 100644
 --- a/src/mods/VR.cpp
 +++ b/src/mods/VR.cpp
 @@ -38,8 +38,10 @@
@@ -406,7 +466,7 @@ index e0f0eb58..c6d16fec 100644
  
      auto openvr_error = initialize_openvr();
  
-@@ -3532,6 +3556,462 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
+@@ -3532,6 +3556,463 @@ bool VR::on_message(HWND wnd, UINT message, WPARAM w_param, LPARAM l_param) {
      return true;
  }
  
@@ -676,6 +736,7 @@ index e0f0eb58..c6d16fec 100644
 +};
 +}
 +IModValue* VR::get_value(std::string_view name) const {
++    if(name=="OpenXR_DebugFrameTrace" && m_openxr) return m_openxr->debug_frame_trace.get();
 +    if(name=="OpenXR_ResolutionScale" && m_openxr) {
 +        if(is_farfarwest_executable_cached()){static FarFarResolutionValue scale;return &scale;}
 +        return m_openxr->resolution_scale.get();
@@ -869,7 +930,7 @@ index e0f0eb58..c6d16fec 100644
  void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE* state) {
      ZoneScopedN(__FUNCTION__);
  
-@@ -3609,6 +4089,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
+@@ -3609,6 +4090,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
      auto runtime = get_runtime();
  
      auto do_pause_select = [&]() {
@@ -877,7 +938,7 @@ index e0f0eb58..c6d16fec 100644
          if (!runtime->ready()) {
              return;
          }
-@@ -3655,7 +4136,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
+@@ -3655,7 +4137,7 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
      const auto right_joystick = get_right_joystick();
      const auto wants_swap = m_swap_controllers->value();
  
@@ -886,7 +947,7 @@ index e0f0eb58..c6d16fec 100644
      do_pause_select();
  
      const auto is_right_a_button_down = is_gamepad_face_action_active(m_action_a_button_right, m_action_a_button_left);
-@@ -3924,6 +4405,27 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
+@@ -3924,6 +4406,27 @@ void VR::on_xinput_get_state(uint32_t* retval, uint32_t user_index, XINPUT_STATE
          }
      }
      
@@ -914,7 +975,7 @@ index e0f0eb58..c6d16fec 100644
      // Do it again after all the VR buttons have been spoofed
      update_imgui_state_from_xinput_state(*state, true);
  }
-@@ -3967,7 +4469,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
+@@ -3967,7 +4470,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
      }
  
      // L3 + R3 to open the menu
@@ -923,7 +984,7 @@ index e0f0eb58..c6d16fec 100644
          if (!FrameworkConfig::get()->is_enable_l3_r3_toggle()) {
              return;
          }
-@@ -4000,7 +4502,9 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
+@@ -4000,7 +4503,9 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
  
      // We need to adjust the stick values based on the selected movement orientation value if the user wants to do this
      // It will either need to be adjusted by the HMD rotation or one of the controllers.
@@ -934,7 +995,7 @@ index e0f0eb58..c6d16fec 100644
          const auto left_stick_og = glm::vec2((float)state.Gamepad.sThumbLX, (float)state.Gamepad.sThumbLY );
          const auto left_stick_magnitude = glm::clamp(glm::length(left_stick_og), -32767.0f, 32767.0f);
          const auto left_stick = glm::normalize(left_stick_og);
-@@ -4064,7 +4568,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
+@@ -4064,7 +4569,7 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
          io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
  
          // Headlocked aim toggle
@@ -943,7 +1004,7 @@ index e0f0eb58..c6d16fec 100644
              if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0 && (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0) {
                  if (!m_xinput_context.headlocked_begin_held) {
                      m_xinput_context.headlocked_begin = std::chrono::steady_clock::now();
-@@ -4204,7 +4708,12 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
+@@ -4204,7 +4709,12 @@ void VR::update_imgui_state_from_xinput_state(XINPUT_STATE& state, bool is_vr_co
          MAP_BUTTON(ImGuiKey_GamepadFaceLeft,        XINPUT_GAMEPAD_X);
          MAP_BUTTON(ImGuiKey_GamepadFaceRight,       XINPUT_GAMEPAD_B);
          MAP_BUTTON(ImGuiKey_GamepadFaceUp,          XINPUT_GAMEPAD_Y);
@@ -957,7 +1018,7 @@ index e0f0eb58..c6d16fec 100644
          MAP_BUTTON(ImGuiKey_GamepadDpadLeft,        XINPUT_GAMEPAD_DPAD_LEFT);
          MAP_BUTTON(ImGuiKey_GamepadDpadRight,       XINPUT_GAMEPAD_DPAD_RIGHT);
          MAP_BUTTON(ImGuiKey_GamepadDpadUp,          XINPUT_GAMEPAD_DPAD_UP);
-@@ -4975,6 +5484,44 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+@@ -4975,6 +5485,44 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
          }
      }
  
@@ -1002,7 +1063,7 @@ index e0f0eb58..c6d16fec 100644
      if (!get_runtime()->loaded || !is_hmd_active()) {
          return;
      }
-@@ -5003,6 +5550,7 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
+@@ -5003,6 +5551,7 @@ void VR::on_pre_engine_tick(sdk::UGameEngine* engine, float delta) {
      // TODO: fix this for actual AFR, but we dont really care about pure AFR since synced beats it most of the time
      if (m_fake_stereo_hook != nullptr && !m_fake_stereo_hook->is_ignoring_next_viewport_draw()) {
          update_action_states();
@@ -1010,7 +1071,7 @@ index e0f0eb58..c6d16fec 100644
          update_imgui_state_from_vr_controller_fallback();
      }
  }
-@@ -8363,8 +8911,61 @@ void VR::handle_keybinds() {
+@@ -8363,8 +8912,61 @@ void VR::handle_keybinds() {
      }
  }
  
@@ -1072,7 +1133,7 @@ index e0f0eb58..c6d16fec 100644
  
      m_last_mod_frame = std::chrono::steady_clock::now();
      m_cvar_manager->on_frame();
-@@ -8581,6 +9182,7 @@ void VR::on_present() {
+@@ -8581,6 +9183,7 @@ void VR::on_present() {
          // On the first ever submit, we need to activate the window and set the mouse to the center
          // so the user doesn't have to click on the window to get input.
          if (m_first_submit) {
@@ -1080,7 +1141,7 @@ index e0f0eb58..c6d16fec 100644
              m_first_submit = false;
              const auto skip_initial_mouse_warp = is_ue418_executable() && should_skip_post_init_properties();
  
-@@ -10484,3 +11086,18 @@ void VR::update_statistics_overlay(sdk::UGameEngine* engine) {
+@@ -10484,3 +11087,18 @@ void VR::update_statistics_overlay(sdk::UGameEngine* engine) {
          m_show_statistics_state = m_show_statistics->value();
      }
  }
@@ -1980,18 +2041,136 @@ index b007e7fb..45cf7668 100644
  };
  } // namespace vrmod
 diff --git a/src/mods/vr/FFakeStereoRenderingHook.cpp b/src/mods/vr/FFakeStereoRenderingHook.cpp
-index a33b21bd..7f095bac 100644
+index a33b21bd..ec0ecd04 100644
 --- a/src/mods/vr/FFakeStereoRenderingHook.cpp
 +++ b/src/mods/vr/FFakeStereoRenderingHook.cpp
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
  #define NOMINMAX
  
  #include <windows.h>
 +#include "FarFarWestMemoryProbe.hpp"
++#include "FarFarWestFamily.hpp"
  #include <d3d11.h>
  #include <d3d12.h>
  #include <winternl.h>
-@@ -11662,6 +11663,22 @@ bool looks_like_virtual_function_table(uintptr_t table) {
+@@ -1166,6 +1168,116 @@ private:
+     bool m_constructed{};
+ };
+ 
++
++// The sequential eye path must not submit a family already populated by the
++// first eye's view extensions. Use the game's own copy/destructor so its arrays
++// and reference-counted fields keep their native lifetime rules.
++class FarFarWestSecondaryFamily {
++public:
++    FarFarWestSecondaryFamily() = default;
++    FarFarWestSecondaryFamily(const FarFarWestSecondaryFamily&) = delete;
++    FarFarWestSecondaryFamily& operator=(const FarFarWestSecondaryFamily&) = delete;
++    ~FarFarWestSecondaryFamily() { reset(); }
++
++    bool initialize(sdk::FSceneViewFamily* source, uintptr_t expected_vtable) {
++        namespace f = farfarvr::family;
++        const auto layout = sdk::FSceneViewFamily::get_layout_snapshot();
++        if (!source || layout->views != 8 || layout->render_target != 0x30 ||
++            layout->scene_interface != 0x40 ||
++            !is_readable_process_range(reinterpret_cast<uintptr_t>(source), f::object_size)) { return false; }
++        const auto module = utility::get_module_within(expected_vtable).value_or(nullptr);
++        static const auto functions = [module]() -> std::optional<UE57FSceneViewFamilyFunctions> {
++            if (!module) { return std::nullopt; }
++            const auto base = reinterpret_cast<uintptr_t>(module);
++            const auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(module);
++            if (!is_readable_process_range(base, sizeof(*dos)) || dos->e_magic != IMAGE_DOS_SIGNATURE ||
++                dos->e_lfanew <= 0 || dos->e_lfanew > 0x1000) { return std::nullopt; }
++            const auto nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
++            if (!is_readable_process_range(reinterpret_cast<uintptr_t>(nt), sizeof(*nt)) ||
++                nt->Signature != IMAGE_NT_SIGNATURE || nt->FileHeader.TimeDateStamp != f::timestamp ||
++                nt->OptionalHeader.SizeOfImage != f::image_size) { return std::nullopt; }
++            const auto matches = [base](uintptr_t rva, const auto& bytes) {
++                return is_executable_process_range(base + rva, bytes.size()) &&
++                    std::memcmp(reinterpret_cast<const void*>(base + rva), bytes.data(), bytes.size()) == 0;
++            };
++            if (!matches(f::copy_rva, f::copy_prefix) ||
++                !matches(f::destructor_rva, f::destructor_code) ||
++                !matches(f::complete_destructor_rva, f::owned_destructor_code) ||
++                !is_readable_process_range(base + f::vtable_rva, sizeof(uintptr_t)) ||
++                *reinterpret_cast<const uintptr_t*>(base + f::vtable_rva) != base + f::destructor_rva) {
++                return std::nullopt;
++            }
++            return UE57FSceneViewFamilyFunctions{
++                reinterpret_cast<UE57FSceneViewFamilyFunctions::CopyConstructor>(base + f::copy_rva),
++                reinterpret_cast<UE57FSceneViewFamilyFunctions::DeletingDestructor>(base + f::destructor_rva),
++                base + f::vtable_rva};
++        }();
++        if (!functions || !module ||
++            utility::get_module_within(reinterpret_cast<uintptr_t>(functions->copy_constructor)).value_or(nullptr) != module) {
++            return false;
++        }
++        uintptr_t source_vtable{};
++        std::memcpy(&source_vtable, source, sizeof(source_vtable));
++        if (source_vtable != expected_vtable) { return false; }
++        std::memcpy(m_borrowed.data(), reinterpret_cast<const uint8_t*>(source) + f::interfaces_offset, sizeof(m_borrowed));
++        // Copy before either renderer call. A pre-owned temporal interface is
++        // not this repair's duplicate-submission case; leave it untouched.
++        if (m_borrowed[f::temporal_index] != 0 || !source->get_views() ||
++            (source->get_views() + 1)->count != 0) { return false; }
++        m_allocator = sdk::FMalloc::get();
++        if (!m_allocator) { return false; }
++        m_object = reinterpret_cast<sdk::FSceneViewFamily*>(m_allocator->malloc(f::object_size, 16));
++        if (!m_object) { return false; }
++        std::memset(m_object, 0, f::object_size);
++        m_functions = functions;
++        m_source = source;
++        const auto result = m_functions->copy_constructor(m_object, source);
++        m_constructed = true;
++        std::array<uintptr_t, f::interface_count> copied{};
++        uintptr_t table{};
++        std::memcpy(&table, m_object, sizeof(table));
++        std::memcpy(copied.data(), reinterpret_cast<const uint8_t*>(m_object) + f::interfaces_offset, sizeof(copied));
++        if (result != m_object || table != m_functions->vtable || copied != m_borrowed ||
++            !validate_ue57_cloned_view_array(source->get_views(), m_object->get_views(), 16) ||
++            !validate_ue57_cloned_view_array(source->get_views() + 1, m_object->get_views() + 1, 32) ||
++            m_object->get_render_target() != source->get_render_target() ||
++            m_object->get_scene_interface() != source->get_scene_interface()) {
++            reset(); return false;
++        }
++        return true;
++    }
++    sdk::FSceneViewFamily* get() const { return m_constructed ? m_object : nullptr; }
++
++private:
++    void reset() {
++        namespace f = farfarvr::family;
++        if (m_constructed && m_object && m_functions) {
++            // Native copying borrows the source's preinstalled interfaces. The
++            // clone owns only interfaces installed independently during its call.
++            std::array<uintptr_t, f::interface_count> source_owned{};
++            std::memcpy(source_owned.data(), reinterpret_cast<const uint8_t*>(m_source) + f::interfaces_offset, sizeof(source_owned));
++            for (size_t i = 0; i < m_borrowed.size(); ++i) {
++                auto slot = reinterpret_cast<uint8_t*>(m_object) + f::interfaces_offset + i * sizeof(uintptr_t);
++                uintptr_t current{};
++                std::memcpy(&current, slot, sizeof(current));
++                if (current && (current == m_borrowed[i] || current == source_owned[i])) {
++                    constexpr uintptr_t empty{};
++                    std::memcpy(slot, &empty, sizeof(empty));
++                }
++            }
++            m_functions->deleting_destructor(m_object, 0);
++        }
++        if (m_object && m_allocator) { m_allocator->free(m_object); }
++        m_object = nullptr; m_source = nullptr; m_constructed = false;
++    }
++    sdk::FSceneViewFamily* m_object{};
++    sdk::FSceneViewFamily* m_source{};
++    sdk::FMalloc* m_allocator{};
++    std::optional<UE57FSceneViewFamilyFunctions> m_functions{};
++    std::array<uintptr_t, farfarvr::family::interface_count> m_borrowed{};
++    bool m_constructed{};
++};
++
+ std::mutex g_shf_texture_probe_mutex{};
+ std::unordered_set<uintptr_t> g_shf_logged_texture_probe_keys{};
+ std::unordered_map<uintptr_t, std::chrono::steady_clock::time_point> g_shf_last_texture_probe_by_base{};
+@@ -11662,6 +11774,22 @@ bool looks_like_virtual_function_table(uintptr_t table) {
          return false;
      }
  
@@ -2014,6 +2193,73 @@ index a33b21bd..7f095bac 100644
      auto executable_entries = 0;
  
      for (auto i = 0; i < 12; ++i) {
+@@ -26834,6 +26962,11 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
+         openvr->pose_queue[now_frame] = openvr->pose_queue[last_frame];
+     }
+ 
++    FarFarWestSecondaryFamily farfar_secondary_family;
++    const bool farfar_independent_family =
++        farfarwest_ue581_view_extension_layout_is_current_game() &&
++        farfar_secondary_family.initialize(view_family, expected_vtable);
++
+     // Render the proven primary view through the game's complete original
+     // family array so auxiliary families keep their normal behavior.
+     views.data[0] = native_left_view;
+@@ -26909,9 +27042,29 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
+         }
+     }};
+ 
++    auto* const secondary_family = farfar_independent_family ? farfar_secondary_family.get() : view_family;
++    bool farfar_family_redirected{};
++    if (farfar_independent_family) {
++        secondary_family->set_render_target(rtfrt);
++        auto* const secondary_views = secondary_family->get_views();
++        secondary_views->data[0] = native_right_view;
++        secondary_views->count = 1;
++        farfar_family_redirected = try_set_ue57_scene_view_family(native_right_view, view_family, secondary_family);
++        if (!farfar_family_redirected) {
++            g_hook->invalidate_native_stereo_frame_packet(NativeStereoFixState::FailedClosed,
++                "Far Far West secondary family backlink could not be redirected");
++            return;
++        }
++    }
++    utility::ScopeGuard restore_farfar_family{[&]() {
++        if (farfar_family_redirected) {
++            try_set_ue57_scene_view_family(native_right_view, secondary_family, view_family);
++        }
++    }};
++
+     const auto render_secondary_view = [&]() {
+         if (uses_tarrayview) {
+-            sdk::FSceneViewFamily* selected_family = view_family;
++            sdk::FSceneViewFamily* selected_family = secondary_family;
+             TArrayViewViewFamily second_family_array{&selected_family, 1};
+             g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(
+                 render_module,
+@@ -26921,7 +27074,7 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
+             g_hook->m_render_module_begin_render_viewfamily_hook.unsafe_call<void>(
+                 render_module,
+                 canvas,
+-                view_family);
++                secondary_family);
+         }
+     };
+ 
+@@ -26992,6 +27145,14 @@ void FFakeStereoRenderingHook::begin_render_viewfamily_real(void* render_module,
+             render_secondary_view();
+         }
+     }
++    if (farfar_family_redirected) {
++        if (!try_set_ue57_scene_view_family(native_right_view, secondary_family, view_family)) {
++            g_hook->invalidate_native_stereo_frame_packet(NativeStereoFixState::FailedClosed,
++                "Far Far West secondary family backlink could not be restored");
++            return;
++        }
++        farfar_family_redirected = false;
++    }
+     stalker_secondary_frame = stalker_family_frame();
+ 
+     if (use_daysgone_same_frame_render) {
 diff --git a/src/mods/vr/IXRTrackingSystemHook.cpp b/src/mods/vr/IXRTrackingSystemHook.cpp
 index 29195fb0..0fa69d3a 100644
 --- a/src/mods/vr/IXRTrackingSystemHook.cpp

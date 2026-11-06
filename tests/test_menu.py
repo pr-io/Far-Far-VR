@@ -205,5 +205,22 @@ class MenuTests(unittest.TestCase):
             assert(files['farfarvr-update-command.txt']=='stage')
         ''')
 
+    def test_diagnostics_open_does_not_start_recording(self):
+        self.check("events.Diagnostics=true; draw(); assert(values.VR_EnableHitchDiagnostics=='false' and values.OpenXR_DebugFrameTrace=='false' and values.FrameworkConfig_LogLevel=='3' and #writes==0)")
+
+    def test_diagnostics_trace_and_off_preserve_player_settings(self):
+        self.check("""local bindings=values.ButtonMapping; local scale=values.OpenXR_ResolutionScale
+            events.Diagnostics=true; draw(); events['Detailed frame trace']=true; draw()
+            assert(values.OpenXR_DebugFrameTrace=='true' and values.FrameworkConfig_LogLevel=='2')
+            events['Performance timing']=true; draw(); assert(values.VR_EnableHitchDiagnostics=='true')
+            events['Turn off diagnostics']=true; draw()
+            assert(values.VR_EnableHitchDiagnostics=='false' and values.OpenXR_DebugFrameTrace=='false' and values.FrameworkConfig_LogLevel=='3')
+            assert(values.ButtonMapping==bindings and values.OpenXR_ResolutionScale==scale and saves==0)""")
+
+    def test_trace_does_not_start_when_log_level_is_rejected(self):
+        self.check("""events.Diagnostics=true; draw(); ignore_writes=true
+            events['Detailed frame trace']=true; draw()
+            assert(values.OpenXR_DebugFrameTrace=='false' and values.FrameworkConfig_LogLevel=='3')""")
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -5,7 +5,8 @@ root = Path(__file__).resolve().parents[1]
 version = (root / 'version.txt').read_text().strip()
 (root / 'Profile/scripts/farfarvr_version.lua').write_text('return '+json.dumps('v'+version)+'\n')
 (root / 'Launcher/ProductVersion.cs').write_text('namespace FarFarWestVR;\ninternal static class ProductVersion { internal const string Value = '+json.dumps(version)+'; }\n')
-for name in ['README.md','BUILD.md']:
+# Local build metadata must not rewrite public release download links.
+for name in ([] if '+' in version else ['README.md','BUILD.md']):
     path=root/name
     import re
     path.write_text(re.sub(r'0\.4\.\d+',version,path.read_text(encoding='utf-8-sig')),encoding='utf-8')
